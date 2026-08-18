@@ -1,0 +1,8 @@
+export type Environment = { id: string; slug: string; name: string; discipline: string; kicker: string; headline: string; body: string; projects: string[]; accent: string };
+
+export const environments: Environment[] = [
+  { id: "01", slug: "laboratory", name: "Laboratory", discipline: "Bioinformatics engineering", kicker: "Decode the invisible", headline: "Where biology becomes signal.", body: "Pipelines and learning systems that turn complex immune and single-cell data into decisions researchers can trust.", projects: ["Immune profiling pipeline", "Single-cell AI"], accent: "#9df7c5" },
+  { id: "02", slug: "city", name: "City", discipline: "Software engineering", kicker: "Infrastructure for ideas", headline: "Systems built to move at city scale.", body: "Fast web products, resilient backend architecture, and automations designed around the way people actually work.", projects: ["Web platforms", "Backend & automation"], accent: "#76c7ff" },
+  { id: "03", slug: "bamboo", name: "Bamboo Forest", discipline: "Business experiences", kicker: "Clarity that converts", headline: "Digital places with a human pulse.", body: "Client-focused websites that make local brands feel distinctive, considered, and effortless to choose.", projects: ["Restaurant experiences", "Before / after redesigns"], accent: "#d7ee7d" },
+  { id: "04", slug: "sky", name: "Sky", discipline: "AI & machine learning", kicker: "Intelligence in motion", headline: "Models that see beyond the horizon.", body: "Deep learning and computer vision explorations shaped into practical, legible systems—not black boxes.", projects: ["Neural networks", "Computer vision"], accent: "#d8d5ff" },
+];
