@@ -36,7 +36,11 @@ const journeyPathPoints = [
   new THREE.Vector3(0, -1.02, 6),
   new THREE.Vector3(0.7, -0.96, 3.5),
   new THREE.Vector3(1.7, -0.78, 1.1),
-  new THREE.Vector3(6.6, -0.98, -1.5),
+  new THREE.Vector3(3, -0.84, 0.45),
+  new THREE.Vector3(4.4, -0.9, -0.35),
+  new THREE.Vector3(5.7, -0.95, -1.45),
+  new THREE.Vector3(6.7, -1, -3.1),
+  new THREE.Vector3(7.4, -1.03, -5),
   new THREE.Vector3(7.7, -1.04, -6),
   new THREE.Vector3(6.1, -1.02, -10.5),
   new THREE.Vector3(2.8, -0.92, -14.5),
@@ -259,7 +263,7 @@ function getJourneyPathColor(progress: number, target: THREE.Color) {
 }
 
 function createJourneyPathGeometry() {
-  const curve = new THREE.CatmullRomCurve3(journeyPathPoints, false, "catmullrom", 0.38);
+  const curve = new THREE.CatmullRomCurve3(journeyPathPoints, false, "centripetal");
   const segments = 240;
   const positions = new Float32Array((segments + 1) * 6);
   const colors = new Float32Array((segments + 1) * 6);
