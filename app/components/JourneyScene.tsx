@@ -19,10 +19,11 @@ const sceneColors = ["#07100d", "#071b18", "#071522", "#152016", "#0d1027"].map(
 );
 
 const LANDING_TIMELINE_END = 0.25;
-const BIRD_APPROACH_START = LANDING_TIMELINE_END * 0.7;
-const BIRD_WHITEOUT_START = LANDING_TIMELINE_END * 0.79;
-const BIRD_FADE_START = LANDING_TIMELINE_END * 0.85;
-const BIRD_HIDDEN_AT = LANDING_TIMELINE_END * 0.9;
+const BIRD_FLIGHT_START = LANDING_TIMELINE_END * 0.35;
+const BIRD_APPROACH_START = LANDING_TIMELINE_END * 0.5;
+const BIRD_WHITEOUT_START = LANDING_TIMELINE_END * 0.62;
+const BIRD_FADE_START = LANDING_TIMELINE_END * 0.68;
+const BIRD_HIDDEN_AT = LANDING_TIMELINE_END * 0.72;
 
 function CameraRig({ progress }: Pick<SceneProps, "progress">) {
   const { camera, scene } = useThree();
@@ -114,8 +115,9 @@ function GuideBird({ progress }: Pick<SceneProps, "progress">) {
     elapsed.current += delta;
     const journey = THREE.MathUtils.clamp(progress.current, 0, 1);
     const intro = THREE.MathUtils.clamp(journey / BIRD_HIDDEN_AT, 0, 1);
-    const flight = THREE.MathUtils.smootherstep(journey, 0.015, BIRD_APPROACH_START);
-    const approach = THREE.MathUtils.smootherstep(journey, BIRD_APPROACH_START, BIRD_FADE_START);
+    const flight = THREE.MathUtils.smootherstep(journey, BIRD_FLIGHT_START, BIRD_APPROACH_START);
+    const approachEase = THREE.MathUtils.smootherstep(journey, BIRD_APPROACH_START, BIRD_FADE_START);
+    const approach = approachEase * approachEase;
     const opacity = 1 - THREE.MathUtils.smoothstep(journey, BIRD_FADE_START, BIRD_HIDDEN_AT);
     const whiteoutIn = THREE.MathUtils.smootherstep(journey, BIRD_WHITEOUT_START, BIRD_FADE_START);
     const whiteoutOut = 1 - THREE.MathUtils.smootherstep(journey, BIRD_FADE_START, BIRD_HIDDEN_AT);
@@ -142,7 +144,7 @@ function GuideBird({ progress }: Pick<SceneProps, "progress">) {
 
     if (bird.current) {
       bird.current.visible = true;
-      const followSpeed = THREE.MathUtils.lerp(4.2, 10, approach);
+      const followSpeed = THREE.MathUtils.lerp(5, 18, approach);
       bird.current.position.lerp(position.current, 1 - Math.exp(-delta * followSpeed));
       bird.current.quaternion.copy(camera.quaternion);
       const bank = Math.sin(flight * Math.PI) * -0.07 * (1 - approach) + Math.sin(elapsed.current * 0.8) * 0.018;
