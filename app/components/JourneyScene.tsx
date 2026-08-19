@@ -18,10 +18,11 @@ const sceneColors = ["#07100d", "#071b18", "#071522", "#152016", "#0d1027"].map(
   (color) => new THREE.Color(color),
 );
 
-const BIRD_APPROACH_START = 0.135;
-const BIRD_WHITEOUT_START = 0.195;
-const BIRD_FADE_START = 0.232;
-const BIRD_HIDDEN_AT = 0.255;
+const LANDING_TIMELINE_END = 0.25;
+const BIRD_APPROACH_START = LANDING_TIMELINE_END * 0.7;
+const BIRD_WHITEOUT_START = LANDING_TIMELINE_END * 0.79;
+const BIRD_FADE_START = LANDING_TIMELINE_END * 0.85;
+const BIRD_HIDDEN_AT = LANDING_TIMELINE_END * 0.9;
 
 function CameraRig({ progress }: Pick<SceneProps, "progress">) {
   const { camera, scene } = useThree();
