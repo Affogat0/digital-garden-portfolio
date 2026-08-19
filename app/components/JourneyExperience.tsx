@@ -2,16 +2,24 @@
 
 import dynamic from "next/dynamic";
 import { motion, useReducedMotion } from "framer-motion";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { environments } from "../data/journey";
 
 const JourneyScene = dynamic(() => import("./JourneyScene").then((module) => module.JourneyScene), { ssr: false });
 
 export function JourneyExperience() {
   const progress = useRef(0);
+  const activeIndexRef = useRef(0);
+  const renderRequestRef = useRef<(() => void) | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [ready, setReady] = useState(false);
+  const [lowQuality] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const deviceMemory = (navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 8;
+    return window.matchMedia("(max-width: 760px)").matches || navigator.hardwareConcurrency <= 4 || deviceMemory <= 4;
+  });
   const reduceMotion = useReducedMotion();
+  const handleSceneReady = useCallback(() => setReady(true), []);
 
   useEffect(() => {
     let frame = 0;
@@ -20,14 +28,21 @@ export function JourneyExperience() {
       const next = scrollable > 0 ? window.scrollY / scrollable : 0;
       progress.current = Math.min(1, Math.max(0, next));
       document.documentElement.style.setProperty("--journey-progress", `${progress.current * 100}%`);
-      setActiveIndex(Math.min(environments.length - 1, Math.max(0, Math.floor(progress.current * 4.15))));
+      const nextIndex = Math.min(environments.length - 1, Math.max(0, Math.floor(progress.current * 4.15)));
+      if (nextIndex !== activeIndexRef.current) {
+        activeIndexRef.current = nextIndex;
+        setActiveIndex(nextIndex);
+      }
+      renderRequestRef.current?.();
       frame = 0;
     };
     const onScroll = () => { if (!frame) frame = window.requestAnimationFrame(update); };
     update();
     window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll, { passive: true });
     return () => {
       window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
       if (frame) window.cancelAnimationFrame(frame);
     };
   }, []);
@@ -35,7 +50,7 @@ export function JourneyExperience() {
   return (
     <main className={`experience ${ready ? "is-ready" : ""}`}>
       <div className="atmosphere" aria-hidden="true" />
-      {!reduceMotion && <JourneyScene progress={progress} onReady={() => setReady(true)} />}
+      {!reduceMotion && <JourneyScene progress={progress} renderRequestRef={renderRequestRef} lowQuality={lowQuality} onReady={handleSceneReady} />}
       <header className="site-nav">
         <a className="wordmark" href="#top" aria-label="Digital Garden home"><span>JH</span><span className="wordmark-copy">Systems / 2026</span></a>
         <span className="nav-status"><i /> Available for select projects</span>
