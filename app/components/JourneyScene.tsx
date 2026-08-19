@@ -18,8 +18,10 @@ const sceneColors = ["#07100d", "#071b18", "#071522", "#152016", "#0d1027"].map(
   (color) => new THREE.Color(color),
 );
 
-const BIRD_FADE_START = 0.18;
-const BIRD_HIDDEN_AT = 0.245;
+const BIRD_APPROACH_START = 0.135;
+const BIRD_WHITEOUT_START = 0.195;
+const BIRD_FADE_START = 0.232;
+const BIRD_HIDDEN_AT = 0.255;
 
 function CameraRig({ progress }: Pick<SceneProps, "progress">) {
   const { camera, scene } = useThree();
@@ -53,6 +55,7 @@ function GuideBird({ progress }: Pick<SceneProps, "progress">) {
   const rightFacetMaterial = useRef<THREE.MeshBasicMaterial>(null);
   const bodyMaterial = useRef<THREE.MeshBasicMaterial>(null);
   const tailMaterial = useRef<THREE.MeshBasicMaterial>(null);
+  const transitionWashMaterial = useRef<THREE.MeshBasicMaterial>(null);
   const glow = useRef<THREE.PointLight>(null);
   const position = useRef(new THREE.Vector3());
   const forward = useRef(new THREE.Vector3());
@@ -110,8 +113,12 @@ function GuideBird({ progress }: Pick<SceneProps, "progress">) {
     elapsed.current += delta;
     const journey = THREE.MathUtils.clamp(progress.current, 0, 1);
     const intro = THREE.MathUtils.clamp(journey / BIRD_HIDDEN_AT, 0, 1);
-    const easedIntro = THREE.MathUtils.smootherstep(intro, 0, 1);
+    const flight = THREE.MathUtils.smootherstep(journey, 0.015, BIRD_APPROACH_START);
+    const approach = THREE.MathUtils.smootherstep(journey, BIRD_APPROACH_START, BIRD_FADE_START);
     const opacity = 1 - THREE.MathUtils.smoothstep(journey, BIRD_FADE_START, BIRD_HIDDEN_AT);
+    const whiteoutIn = THREE.MathUtils.smootherstep(journey, BIRD_WHITEOUT_START, BIRD_FADE_START);
+    const whiteoutOut = 1 - THREE.MathUtils.smootherstep(journey, BIRD_FADE_START, BIRD_HIDDEN_AT);
+    const whiteout = whiteoutIn * whiteoutOut;
 
     if (bird.current && journey >= BIRD_HIDDEN_AT) {
       bird.current.visible = false;
@@ -122,9 +129,10 @@ function GuideBird({ progress }: Pick<SceneProps, "progress">) {
     right.current.set(1, 0, 0).applyQuaternion(camera.quaternion);
     up.current.set(0, 1, 0).applyQuaternion(camera.quaternion);
 
-    const distance = THREE.MathUtils.lerp(8, 1.5, easedIntro);
-    const lateral = THREE.MathUtils.lerp(-0.7, 0, easedIntro) + Math.sin(easedIntro * Math.PI) * 0.35;
-    const vertical = THREE.MathUtils.lerp(-0.65, -0.08, easedIntro) + Math.sin(easedIntro * Math.PI) * 0.12;
+    const flightDistance = THREE.MathUtils.lerp(8, 5.2, flight);
+    const distance = THREE.MathUtils.lerp(flightDistance, 0.55, approach);
+    const lateral = THREE.MathUtils.lerp(-0.7, -0.25, flight) * (1 - approach);
+    const vertical = THREE.MathUtils.lerp(-0.65, -0.32, flight) * (1 - approach);
     position.current.copy(camera.position)
       .addScaledVector(forward.current, distance)
       .addScaledVector(right.current, lateral)
@@ -133,37 +141,51 @@ function GuideBird({ progress }: Pick<SceneProps, "progress">) {
 
     if (bird.current) {
       bird.current.visible = true;
-      bird.current.position.lerp(position.current, 1 - Math.exp(-delta * 4.2));
+      const followSpeed = THREE.MathUtils.lerp(4.2, 10, approach);
+      bird.current.position.lerp(position.current, 1 - Math.exp(-delta * followSpeed));
       bird.current.quaternion.copy(camera.quaternion);
-      const bank = Math.sin(easedIntro * Math.PI) * -0.08 + Math.sin(elapsed.current * 0.8) * 0.018;
+      const bank = Math.sin(flight * Math.PI) * -0.07 * (1 - approach) + Math.sin(elapsed.current * 0.8) * 0.018;
       bird.current.rotateZ(bank);
       const breath = 1 + Math.sin(elapsed.current * 1.35) * 0.018;
-      bird.current.scale.setScalar(THREE.MathUtils.lerp(0.64, 0.24, easedIntro) * breath);
+      const flightScale = THREE.MathUtils.lerp(0.54, 0.68, flight);
+      bird.current.scale.setScalar(THREE.MathUtils.lerp(flightScale, 1.75, approach) * breath);
     }
 
-    const flap = Math.sin(elapsed.current * (2.7 + intro * 1.2)) * (0.09 + intro * 0.055);
-    if (leftWing.current) leftWing.current.rotation.z = 0.025 + flap;
-    if (rightWing.current) rightWing.current.rotation.z = -0.025 - flap;
+    const flap = Math.sin(elapsed.current * (2.7 + intro * 1.2)) * (0.09 + flight * 0.06) * (1 - approach * 0.72);
+    const wingExpansion = THREE.MathUtils.lerp(1, 1.48, approach);
+    if (leftWing.current) {
+      leftWing.current.rotation.z = 0.025 + flap;
+      leftWing.current.scale.set(1, wingExpansion, 1);
+    }
+    if (rightWing.current) {
+      rightWing.current.rotation.z = -0.025 - flap;
+      rightWing.current.scale.set(-1, wingExpansion, 1);
+    }
     if (mainMaterial.current) mainMaterial.current.opacity = opacity;
     if (rightMainMaterial.current) rightMainMaterial.current.opacity = opacity;
     if (leftFacetMaterial.current) leftFacetMaterial.current.opacity = opacity * 0.62;
     if (rightFacetMaterial.current) rightFacetMaterial.current.opacity = opacity * 0.5;
     if (bodyMaterial.current) bodyMaterial.current.opacity = opacity;
     if (tailMaterial.current) tailMaterial.current.opacity = opacity;
-    if (glow.current) glow.current.intensity = opacity * 1.8;
+    if (transitionWashMaterial.current) transitionWashMaterial.current.opacity = whiteout * 0.96;
+    if (glow.current) glow.current.intensity = opacity * 1.8 + whiteout * 8;
   });
 
   return <group ref={bird} scale={0.64}>
     <group ref={leftWing}>
-      <mesh geometry={wingGeometry}><meshBasicMaterial ref={mainMaterial} color="#ffffff" transparent side={THREE.DoubleSide} toneMapped={false} /></mesh>
-      <mesh geometry={wingFacetGeometry} position={[0, 0, 0.012]}><meshBasicMaterial ref={leftFacetMaterial} color="#dce5ed" transparent opacity={0.62} side={THREE.DoubleSide} toneMapped={false} /></mesh>
+      <mesh geometry={wingGeometry} renderOrder={2}><meshBasicMaterial ref={mainMaterial} color="#ffffff" transparent depthTest={false} side={THREE.DoubleSide} toneMapped={false} /></mesh>
+      <mesh geometry={wingFacetGeometry} position={[0, 0, 0.012]} renderOrder={3}><meshBasicMaterial ref={leftFacetMaterial} color="#dce5ed" transparent opacity={0.62} depthTest={false} side={THREE.DoubleSide} toneMapped={false} /></mesh>
     </group>
     <group ref={rightWing} scale={[-1, 1, 1]}>
-      <mesh geometry={wingGeometry}><meshBasicMaterial ref={rightMainMaterial} color="#ffffff" transparent side={THREE.DoubleSide} toneMapped={false} /></mesh>
-      <mesh geometry={wingFacetGeometry} position={[0, 0, 0.012]}><meshBasicMaterial ref={rightFacetMaterial} color="#eef3f6" transparent opacity={0.5} side={THREE.DoubleSide} toneMapped={false} /></mesh>
+      <mesh geometry={wingGeometry} renderOrder={2}><meshBasicMaterial ref={rightMainMaterial} color="#ffffff" transparent depthTest={false} side={THREE.DoubleSide} toneMapped={false} /></mesh>
+      <mesh geometry={wingFacetGeometry} position={[0, 0, 0.012]} renderOrder={3}><meshBasicMaterial ref={rightFacetMaterial} color="#eef3f6" transparent opacity={0.5} depthTest={false} side={THREE.DoubleSide} toneMapped={false} /></mesh>
     </group>
-    <mesh geometry={bodyGeometry} position={[0, 0.01, 0.024]}><meshBasicMaterial ref={bodyMaterial} color="#ffffff" transparent side={THREE.DoubleSide} toneMapped={false} /></mesh>
-    <mesh geometry={tailGeometry} position={[0, -0.48, 0.018]}><meshBasicMaterial ref={tailMaterial} color="#edf2f6" transparent side={THREE.DoubleSide} toneMapped={false} /></mesh>
+    <mesh geometry={bodyGeometry} position={[0, 0.01, 0.024]} renderOrder={4}><meshBasicMaterial ref={bodyMaterial} color="#ffffff" transparent depthTest={false} side={THREE.DoubleSide} toneMapped={false} /></mesh>
+    <mesh geometry={tailGeometry} position={[0, -0.48, 0.018]} renderOrder={3}><meshBasicMaterial ref={tailMaterial} color="#edf2f6" transparent depthTest={false} side={THREE.DoubleSide} toneMapped={false} /></mesh>
+    <mesh position={[0, 0, -0.08]} renderOrder={1}>
+      <planeGeometry args={[8, 8]} />
+      <meshBasicMaterial ref={transitionWashMaterial} color="#ffffff" transparent opacity={0} depthTest={false} depthWrite={false} toneMapped={false} />
+    </mesh>
     <pointLight ref={glow} color="#e7f4ff" intensity={1.8} distance={2.4} position={[0, 0, 0.4]} />
   </group>;
 }
