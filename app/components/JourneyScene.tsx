@@ -24,10 +24,32 @@ const BIRD_APPROACH_START = LANDING_TIMELINE_END * 0.5;
 const BIRD_WHITEOUT_START = LANDING_TIMELINE_END * 0.62;
 const BIRD_FADE_START = LANDING_TIMELINE_END * 0.68;
 const BIRD_HIDDEN_AT = LANDING_TIMELINE_END * 0.72;
+const CAMERA_SETBACK = 4.5;
+
+const journeyPathSegments = [
+  {
+    points: [new THREE.Vector3(0, -1.02, 5), new THREE.Vector3(0.6, -0.96, 0), new THREE.Vector3(1.7, -0.78, -5), new THREE.Vector3(0.5, -0.96, -10)],
+    widthStart: 2.2, widthEnd: 1.8, color: "#173f36", emissive: "#4fd3aa", emissiveIntensity: 0.72, metalness: 0.58, opacity: 0.92,
+  },
+  {
+    points: [new THREE.Vector3(0.5, -0.96, -10), new THREE.Vector3(-1.2, -0.92, -14.5), new THREE.Vector3(-2.1, -0.86, -19), new THREE.Vector3(-0.5, -1.02, -25)],
+    widthStart: 1.8, widthEnd: 1.3, color: "#102d3d", emissive: "#3bafe1", emissiveIntensity: 0.78, metalness: 0.72, opacity: 0.9,
+  },
+  {
+    points: [new THREE.Vector3(-0.5, -1.02, -25), new THREE.Vector3(1.1, -1.08, -29), new THREE.Vector3(2.1, -1.12, -33), new THREE.Vector3(0.5, -1.08, -40)],
+    widthStart: 1.3, widthEnd: 1.05, color: "#5c432c", emissive: "#2b2115", emissiveIntensity: 0.32, metalness: 0.08, opacity: 0.96,
+  },
+  {
+    points: [new THREE.Vector3(0.5, -1.08, -40), new THREE.Vector3(-0.35, -0.3, -44), new THREE.Vector3(-1.6, 1.8, -47), new THREE.Vector3(-1.2, 5.6, -53)],
+    widthStart: 1.05, widthEnd: 0.04, color: "#7778a8", emissive: "#aaa7ef", emissiveIntensity: 0.9, metalness: 0.15, opacity: 0.42,
+  },
+];
 
 function CameraRig({ progress }: Pick<SceneProps, "progress">) {
   const { camera, scene } = useThree();
   const position = useMemo(() => new THREE.Vector3(), []);
+  const framedPosition = useMemo(() => new THREE.Vector3(), []);
+  const framingOffset = useMemo(() => new THREE.Vector3(0, 0, CAMERA_SETBACK), []);
   const lookAt = useMemo(() => new THREE.Vector3(), []);
   const color = useMemo(() => new THREE.Color(), []);
 
@@ -36,8 +58,9 @@ function CameraRig({ progress }: Pick<SceneProps, "progress">) {
     const index = Math.min(cameraPoints.length - 2, Math.floor(scaled));
     const local = THREE.MathUtils.smootherstep(scaled - index, 0, 1);
     position.lerpVectors(cameraPoints[index], cameraPoints[index + 1], local);
-    camera.position.lerp(position, 1 - Math.exp(-delta * 2.8));
-    lookAt.set(0, 1.5, camera.position.z - 7.5);
+    framedPosition.copy(position).add(framingOffset);
+    camera.position.lerp(framedPosition, 1 - Math.exp(-delta * 2.8));
+    lookAt.set(0, 2.1, camera.position.z - 12.5);
     camera.lookAt(lookAt);
     color.lerpColors(sceneColors[index], sceneColors[index + 1], local);
     scene.background?.copy(color);
@@ -199,6 +222,98 @@ function LineSegments({ points, color, opacity = 0.45 }: { points: THREE.Vector3
   return <lineSegments geometry={geometry}><lineBasicMaterial color={color} transparent opacity={opacity} /></lineSegments>;
 }
 
+function createRibbonGeometry(points: THREE.Vector3[], widthStart: number, widthEnd: number) {
+  const curve = new THREE.CatmullRomCurve3(points, false, "catmullrom", 0.35);
+  const segments = 32;
+  const positions = new Float32Array((segments + 1) * 6);
+  const indices: number[] = [];
+  const point = new THREE.Vector3();
+  const tangent = new THREE.Vector3();
+  const side = new THREE.Vector3();
+
+  for (let index = 0; index <= segments; index += 1) {
+    const progress = index / segments;
+    curve.getPoint(progress, point);
+    curve.getTangent(progress, tangent);
+    side.set(-tangent.z, 0, tangent.x).normalize().multiplyScalar(THREE.MathUtils.lerp(widthStart, widthEnd, progress) * 0.5);
+    const offset = index * 6;
+    positions[offset] = point.x + side.x;
+    positions[offset + 1] = point.y + 0.025;
+    positions[offset + 2] = point.z + side.z;
+    positions[offset + 3] = point.x - side.x;
+    positions[offset + 4] = point.y + 0.025;
+    positions[offset + 5] = point.z - side.z;
+
+    if (index < segments) {
+      const current = index * 2;
+      const next = current + 2;
+      indices.push(current, next, current + 1, current + 1, next, next + 1);
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function JourneyPath() {
+  const geometries = useMemo(() => journeyPathSegments.map((segment) => createRibbonGeometry(segment.points, segment.widthStart, segment.widthEnd)), []);
+  useEffect(() => () => geometries.forEach((geometry) => geometry.dispose()), [geometries]);
+
+  return <group>{journeyPathSegments.map((segment, index) => <mesh key={segment.color} geometry={geometries[index]} receiveShadow>
+    <meshStandardMaterial color={segment.color} emissive={segment.emissive} emissiveIntensity={segment.emissiveIntensity} metalness={segment.metalness} roughness={index === 2 ? 0.92 : 0.42} transparent={segment.opacity < 1} opacity={segment.opacity} depthWrite={index !== 3} side={THREE.DoubleSide} />
+  </mesh>)}</group>;
+}
+
+function createHorizonGeometry(side: -1 | 1) {
+  const steps = 14;
+  const positions = new Float32Array((steps + 1) * 6);
+  const indices: number[] = [];
+
+  for (let index = 0; index <= steps; index += 1) {
+    const progress = index / steps;
+    const z = THREE.MathUtils.lerp(12, -60, progress);
+    const x = side * (11.5 + Math.sin(index * 1.7) * 1.2 + (index % 3) * 0.55);
+    const height = 1.4 + ((index * 7) % 5) * 0.58 + Math.sin(index * 0.8) * 0.35;
+    const offset = index * 6;
+    positions[offset] = x;
+    positions[offset + 1] = -1.5;
+    positions[offset + 2] = z;
+    positions[offset + 3] = x;
+    positions[offset + 4] = height;
+    positions[offset + 5] = z;
+
+    if (index < steps) {
+      const current = index * 2;
+      const next = current + 2;
+      indices.push(current, current + 1, next, current + 1, next + 1, next);
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function DistantWorld() {
+  const horizons = useMemo(() => [createHorizonGeometry(-1), createHorizonGeometry(1)], []);
+  useEffect(() => () => horizons.forEach((geometry) => geometry.dispose()), [horizons]);
+
+  return <group>
+    <mesh position={[0, -1.48, -23]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+      <planeGeometry args={[70, 78]} />
+      <meshStandardMaterial color="#07110f" roughness={1} metalness={0.05} />
+    </mesh>
+    {horizons.map((geometry, index) => <mesh key={index} geometry={geometry}>
+      <meshStandardMaterial color={index ? "#101b19" : "#0b1716"} roughness={1} side={THREE.DoubleSide} />
+    </mesh>)}
+  </group>;
+}
+
 function CellField() {
   const group = useRef<THREE.Group>(null);
   const cells = useMemo(() => Array.from({ length: 13 }, (_, i) => ({
@@ -293,9 +408,9 @@ function AISky() {
 
 function SceneContents({ progress, onReady }: SceneProps) {
   useEffect(() => onReady(), [onReady]);
-  return <><color attach="background" args={["#07100d"]} /><fog attach="fog" args={["#07100d", 8, 27]} /><ambientLight intensity={0.62} color="#b8ddc7" /><directionalLight position={[7, 14, 8]} intensity={2.1} color="#e8fff0" /><CameraRig progress={progress} /><GuideBird progress={progress} /><Laboratory /><SoftwareCity /><BambooForest /><AISky /></>;
+  return <><color attach="background" args={["#07100d"]} /><fog attach="fog" args={["#07100d", 11, 46]} /><ambientLight intensity={0.56} color="#b8ddc7" /><hemisphereLight intensity={0.42} color="#8ba9ba" groundColor="#152018" /><directionalLight position={[7, 14, 8]} intensity={2.1} color="#e8fff0" /><CameraRig progress={progress} /><GuideBird progress={progress} /><DistantWorld /><JourneyPath /><Laboratory /><SoftwareCity /><BambooForest /><AISky /></>;
 }
 
 export function JourneyScene(props: SceneProps) {
-  return <div className="scene-canvas" aria-hidden="true"><Canvas camera={{ position: cameraPoints[0].toArray(), fov: 42, near: 0.1, far: 100 }} dpr={[1, 1.35]} gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}><SceneContents {...props} /></Canvas></div>;
+  return <div className="scene-canvas" aria-hidden="true"><Canvas camera={{ position: [cameraPoints[0].x, cameraPoints[0].y, cameraPoints[0].z + CAMERA_SETBACK], fov: 48, near: 0.1, far: 140 }} dpr={[1, 1.35]} gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}><SceneContents {...props} /></Canvas></div>;
 }
