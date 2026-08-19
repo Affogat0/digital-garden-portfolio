@@ -8,8 +8,8 @@ type CinematicHeroProps = {
 
 type TimelineState = "intro" | "arrived" | "past";
 
-const FRAME_COUNT = 90;
-const FRAME_PRELOAD_STEP = 8;
+const FRAME_COUNT = 119;
+const FRAME_PRELOAD_STEP = 6;
 
 function getFrameSource(index: number) {
   return `/cinematic-frames/frame-${String(index).padStart(3, "0")}.webp`;
@@ -107,6 +107,8 @@ function useFrameSequenceController(
       loadFrame(requestedFrame + 1);
       loadFrame(requestedFrame - 2);
       loadFrame(requestedFrame + 2);
+      loadFrame(requestedFrame - 3);
+      loadFrame(requestedFrame + 3);
       drawClosestLoadedFrame(requestedFrame);
 
       const nextTimelineState = getTimelineState(progress);
@@ -125,7 +127,7 @@ function useFrameSequenceController(
       const next = keyframes.shift();
       if (next === undefined || disposed) return;
       loadFrame(next);
-      preloadTimer = window.setTimeout(preloadNextKeyframe, 140);
+      preloadTimer = window.setTimeout(preloadNextKeyframe, 100);
     };
 
     loadFrame(0);
