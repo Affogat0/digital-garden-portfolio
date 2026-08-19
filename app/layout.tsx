@@ -7,7 +7,7 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 
 export const metadata: Metadata = {
   title: "The Digital Garden of Systems",
-  description: "Follow a white bird through biology, software, business, and intelligent systems.",
+  description: "A journey through biology, software, business, and intelligent systems.",
   icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },
 };
 

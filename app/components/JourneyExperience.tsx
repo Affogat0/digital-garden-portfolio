@@ -20,7 +20,6 @@ export function JourneyExperience() {
       const next = scrollable > 0 ? window.scrollY / scrollable : 0;
       progress.current = Math.min(1, Math.max(0, next));
       document.documentElement.style.setProperty("--journey-progress", `${progress.current * 100}%`);
-      document.documentElement.style.setProperty("--intro-flight", `${Math.min(1, progress.current * 8)}`);
       setActiveIndex(Math.min(environments.length - 1, Math.max(0, Math.floor(progress.current * 4.15))));
       frame = 0;
     };
@@ -47,21 +46,15 @@ export function JourneyExperience() {
       </aside>
 
       <section className="hero panel" id="top">
-        <motion.div className="eyebrow" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: .2, duration: .8 }}><span>A portfolio about curiosity</span><span>Scroll to take flight</span></motion.div>
-        <div className="bird-opening">
-          <motion.div className="bird-mark" initial={{ opacity: 0, scale: .72 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 1.2, ease: [.2, .8, .2, 1] }} aria-hidden="true">
-            <i className="bird-wing bird-wing-left" /><i className="bird-body" /><i className="bird-wing bird-wing-right" />
-          </motion.div>
-          <motion.p className="bird-manifesto" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: .55, duration: .8 }}>Curiosity finds a way forward.</motion.p>
-        </div>
-        <motion.h1 initial={{ opacity: 0, y: 35 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: .15, duration: 1, ease: [.2, .8, .2, 1] }}>Follow the<br /><em>curious.</em></motion.h1>
-        <motion.p className="hero-copy" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: .45, duration: .8 }}>A white bird leads the way through biology, software, business, and intelligent systems.</motion.p>
+        <motion.div className="eyebrow" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: .2, duration: .8 }}><span>Portfolio experience</span><span>Scroll to explore</span></motion.div>
+        <motion.h1 initial={{ opacity: 0, y: 35 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 1, ease: [.2, .8, .2, 1] }}>The Digital Garden<br /><em>of Systems</em></motion.h1>
+        <motion.p className="hero-copy" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: .35, duration: .8 }}>I design intelligent systems at the intersection of biology, software, business, and machine learning.</motion.p>
         <div className="journey-index" aria-label="Journey environments">
           {environments.map((environment) => (
             <a href={`#${environment.slug}`} key={environment.slug}><span className="journey-number">{environment.id}</span><span><strong>{environment.name}</strong><small>{environment.discipline}</small></span></a>
           ))}
         </div>
-        <a className="scroll-cue" href="#laboratory"><span>Begin the journey</span><i>↓</i></a>
+        <a className="scroll-cue" href="#laboratory"><span>Follow the white bird</span><i>↓</i></a>
       </section>
 
       {environments.map((environment, index) => (
