@@ -29,19 +29,32 @@ const BIRD_FADE_START = LANDING_TIMELINE_END * 0.68;
 const BIRD_HIDDEN_AT = LANDING_TIMELINE_END * 0.72;
 const CAMERA_SETBACK = 4.5;
 
-const journeyPathSegments = [
-  {
-    points: [new THREE.Vector3(0, -1.02, 6), new THREE.Vector3(0.7, -0.96, 3.5), new THREE.Vector3(1.7, -0.78, 1.1)],
-    widthStart: 2.1, widthEnd: 1.65, color: "#173f36", emissive: "#4fd3aa", emissiveIntensity: 0.72, metalness: 0.58, opacity: 0.92,
-  },
-  {
-    points: [new THREE.Vector3(1.7, -0.78, 1.1), new THREE.Vector3(6.6, -0.98, -1.5), new THREE.Vector3(7.7, -1.04, -6), new THREE.Vector3(6.1, -1.02, -10.5), new THREE.Vector3(2.8, -0.92, -14.5), new THREE.Vector3(2.7, -0.95, -22.8)],
-    widthStart: 1.65, widthEnd: 1.2, color: "#102d3d", emissive: "#3bafe1", emissiveIntensity: 0.78, metalness: 0.72, opacity: 0.9,
-  },
-  {
-    points: [new THREE.Vector3(2.7, -0.95, -22.8), new THREE.Vector3(4.7, -1.02, -24), new THREE.Vector3(5.4, -1.08, -25.2), new THREE.Vector3(3.4, -1.12, -26.5)],
-    widthStart: 1.2, widthEnd: 0.68, color: "#5c432c", emissive: "#2b2115", emissiveIntensity: 0.32, metalness: 0.08, opacity: 0.96,
-  },
+const journeyPathPoints = [
+  new THREE.Vector3(0, -1.02, 6),
+  new THREE.Vector3(0.7, -0.96, 3.5),
+  new THREE.Vector3(1.7, -0.78, 1.1),
+  new THREE.Vector3(6.6, -0.98, -1.5),
+  new THREE.Vector3(7.7, -1.04, -6),
+  new THREE.Vector3(6.1, -1.02, -10.5),
+  new THREE.Vector3(2.8, -0.92, -14.5),
+  new THREE.Vector3(2.7, -0.95, -22.8),
+  new THREE.Vector3(4.7, -1.02, -24),
+  new THREE.Vector3(5.4, -1.08, -25.2),
+  new THREE.Vector3(3.4, -1.12, -26.5),
+  new THREE.Vector3(2.5, -1.16, -31),
+  new THREE.Vector3(2.1, -1.17, -36),
+  new THREE.Vector3(1, -1.14, -41),
+  new THREE.Vector3(0, -1.08, -46),
+  new THREE.Vector3(-0.8, -1, -51),
+  new THREE.Vector3(-1.2, -0.86, -55),
+];
+
+const journeyPathColors = [
+  { at: 0, color: new THREE.Color("#4fd3aa") },
+  { at: 0.34, color: new THREE.Color("#47758a") },
+  { at: 0.56, color: new THREE.Color("#4f5d63") },
+  { at: 0.74, color: new THREE.Color("#806345") },
+  { at: 1, color: new THREE.Color("#5d6873") },
 ];
 
 function CameraRig({ progress }: Pick<SceneProps, "progress">) {
@@ -67,7 +80,9 @@ function CameraRig({ progress }: Pick<SceneProps, "progress">) {
     camera.lookAt(lookAt);
     color.lerpColors(sceneColors[index], sceneColors[index + 1], local);
     scene.background?.copy(color);
-    if (scene.fog instanceof THREE.Fog) scene.fog.color.copy(color);
+    if (scene.fog instanceof THREE.Fog) {
+      scene.fog.color.copy(color);
+    }
   });
   return null;
 }
@@ -225,20 +240,34 @@ function LineSegments({ points, color, opacity = 0.45 }: { points: THREE.Vector3
   return <lineSegments geometry={geometry}><lineBasicMaterial color={color} transparent opacity={opacity} /></lineSegments>;
 }
 
-function createRibbonGeometry(points: THREE.Vector3[], widthStart: number, widthEnd: number) {
-  const curve = new THREE.CatmullRomCurve3(points, false, "catmullrom", 0.35);
-  const segments = 32;
+function getJourneyPathColor(progress: number, target: THREE.Color) {
+  const upperIndex = journeyPathColors.findIndex((stop) => stop.at >= progress);
+  if (upperIndex === -1) return target.copy(journeyPathColors[journeyPathColors.length - 1].color);
+  if (upperIndex <= 0) return target.copy(journeyPathColors[0].color);
+  const upper = journeyPathColors[upperIndex];
+  const lower = journeyPathColors[upperIndex - 1];
+  const local = (progress - lower.at) / (upper.at - lower.at);
+  return target.lerpColors(lower.color, upper.color, THREE.MathUtils.smootherstep(local, 0, 1));
+}
+
+function createJourneyPathGeometry() {
+  const curve = new THREE.CatmullRomCurve3(journeyPathPoints, false, "catmullrom", 0.38);
+  const segments = 160;
   const positions = new Float32Array((segments + 1) * 6);
+  const colors = new Float32Array((segments + 1) * 6);
   const indices: number[] = [];
   const point = new THREE.Vector3();
   const tangent = new THREE.Vector3();
   const side = new THREE.Vector3();
+  const color = new THREE.Color();
 
   for (let index = 0; index <= segments; index += 1) {
     const progress = index / segments;
-    curve.getPoint(progress, point);
-    curve.getTangent(progress, tangent);
-    side.set(-tangent.z, 0, tangent.x).normalize().multiplyScalar(THREE.MathUtils.lerp(widthStart, widthEnd, progress) * 0.5);
+    curve.getPointAt(progress, point);
+    curve.getTangentAt(progress, tangent);
+    const taper = THREE.MathUtils.smootherstep(progress, 0.72, 1);
+    const width = THREE.MathUtils.lerp(1.5, 0.06, taper);
+    side.set(-tangent.z, 0, tangent.x).normalize().multiplyScalar(width * 0.5);
     const offset = index * 6;
     positions[offset] = point.x + side.x;
     positions[offset + 1] = point.y + 0.025;
@@ -246,6 +275,13 @@ function createRibbonGeometry(points: THREE.Vector3[], widthStart: number, width
     positions[offset + 3] = point.x - side.x;
     positions[offset + 4] = point.y + 0.025;
     positions[offset + 5] = point.z - side.z;
+    getJourneyPathColor(progress, color);
+    colors[offset] = color.r;
+    colors[offset + 1] = color.g;
+    colors[offset + 2] = color.b;
+    colors[offset + 3] = color.r;
+    colors[offset + 4] = color.g;
+    colors[offset + 5] = color.b;
 
     if (index < segments) {
       const current = index * 2;
@@ -256,18 +292,19 @@ function createRibbonGeometry(points: THREE.Vector3[], widthStart: number, width
 
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
   return geometry;
 }
 
 function JourneyPath() {
-  const geometries = useMemo(() => journeyPathSegments.map((segment) => createRibbonGeometry(segment.points, segment.widthStart, segment.widthEnd)), []);
-  useEffect(() => () => geometries.forEach((geometry) => geometry.dispose()), [geometries]);
+  const geometry = useMemo(() => createJourneyPathGeometry(), []);
+  useEffect(() => () => geometry.dispose(), [geometry]);
 
-  return <group>{journeyPathSegments.map((segment, index) => <mesh key={segment.color} geometry={geometries[index]} receiveShadow>
-    <meshStandardMaterial color={segment.color} emissive={segment.emissive} emissiveIntensity={segment.emissiveIntensity} metalness={segment.metalness} roughness={index === 2 ? 0.92 : 0.42} transparent={segment.opacity < 1} opacity={segment.opacity} side={THREE.DoubleSide} />
-  </mesh>)}</group>;
+  return <mesh geometry={geometry} receiveShadow>
+    <meshStandardMaterial color="#ffffff" vertexColors emissive="#13221f" emissiveIntensity={0.42} metalness={0.38} roughness={0.58} side={THREE.DoubleSide} />
+  </mesh>;
 }
 
 function createHorizonGeometry(side: -1 | 1) {
@@ -307,8 +344,8 @@ function DistantWorld() {
   useEffect(() => () => horizons.forEach((geometry) => geometry.dispose()), [horizons]);
 
   return <group>
-    <mesh position={[0, -1.48, -14]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-      <planeGeometry args={[70, 60]} />
+    <mesh position={[0, -1.48, -20]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+      <planeGeometry args={[70, 72]} />
       <meshStandardMaterial color="#07110f" roughness={1} metalness={0.05} />
     </mesh>
     {horizons.map((geometry, index) => <mesh key={index} geometry={geometry}>
@@ -411,7 +448,7 @@ function AISky() {
 
 function SceneContents({ progress, onReady }: SceneProps) {
   useEffect(() => onReady(), [onReady]);
-  return <><color attach="background" args={["#07100d"]} /><fog attach="fog" args={["#07100d", 11, 46]} /><ambientLight intensity={0.56} color="#b8ddc7" /><hemisphereLight intensity={0.42} color="#8ba9ba" groundColor="#152018" /><directionalLight position={[7, 14, 8]} intensity={2.1} color="#e8fff0" /><CameraRig progress={progress} /><GuideBird progress={progress} /><DistantWorld /><JourneyPath /><Laboratory /><SoftwareCity /><BambooForest /><AISky /></>;
+  return <><color attach="background" args={["#07100d"]} /><fog attach="fog" args={["#07100d", 10, 38]} /><ambientLight intensity={0.56} color="#b8ddc7" /><hemisphereLight intensity={0.42} color="#8ba9ba" groundColor="#152018" /><directionalLight position={[7, 14, 8]} intensity={2.1} color="#e8fff0" /><CameraRig progress={progress} /><GuideBird progress={progress} /><DistantWorld /><JourneyPath /><Laboratory /><SoftwareCity /><BambooForest /><AISky /></>;
 }
 
 export function JourneyScene(props: SceneProps) {
