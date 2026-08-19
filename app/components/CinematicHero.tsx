@@ -8,6 +8,13 @@ type CinematicHeroProps = {
 
 type TimelineState = "intro" | "arrived" | "past";
 
+const FRAME_COUNT = 90;
+const FRAME_PRELOAD_STEP = 8;
+
+function getFrameSource(index: number) {
+  return `/cinematic-frames/frame-${String(index).padStart(3, "0")}.webp`;
+}
+
 function calculateLandingProgress() {
   const landing = document.getElementById("top");
   if (!landing) return 0;
@@ -22,81 +29,131 @@ function getTimelineState(progress: number): TimelineState {
   return progress >= 1 ? "arrived" : "intro";
 }
 
-function useVideoTimelineController(
-  videoRef: MutableRefObject<HTMLVideoElement | null>,
+function drawImageCover(canvas: HTMLCanvasElement, image: HTMLImageElement) {
+  const width = canvas.clientWidth;
+  const height = canvas.clientHeight;
+  const pixelRatio = Math.min(window.devicePixelRatio || 1, 1.5);
+  const renderWidth = Math.round(width * pixelRatio);
+  const renderHeight = Math.round(height * pixelRatio);
+  if (canvas.width !== renderWidth || canvas.height !== renderHeight) {
+    canvas.width = renderWidth;
+    canvas.height = renderHeight;
+  }
+
+  const context = canvas.getContext("2d", { alpha: false });
+  if (!context) return;
+  const scale = Math.max(renderWidth / image.naturalWidth, renderHeight / image.naturalHeight);
+  const drawWidth = image.naturalWidth * scale;
+  const drawHeight = image.naturalHeight * scale;
+  context.fillStyle = "#07100d";
+  context.fillRect(0, 0, renderWidth, renderHeight);
+  context.drawImage(image, (renderWidth - drawWidth) / 2, (renderHeight - drawHeight) / 2, drawWidth, drawHeight);
+}
+
+function useFrameSequenceController(
+  canvasRef: MutableRefObject<HTMLCanvasElement | null>,
   containerRef: MutableRefObject<HTMLDivElement | null>,
   onReady?: () => void,
 ) {
-  const readyCalledRef = useRef(false);
-  const timelineStateRef = useRef<TimelineState>("intro");
-
   useEffect(() => {
-    let frame = 0;
+    const cache = new Map<number, HTMLImageElement>();
+    const keyframes = Array.from({ length: Math.ceil(FRAME_COUNT / FRAME_PRELOAD_STEP) }, (_, index) => index * FRAME_PRELOAD_STEP)
+      .filter((index) => index > 0 && index < FRAME_COUNT - 1);
+    let animationFrame = 0;
+    let preloadTimer = 0;
+    let requestedFrame = 0;
+    let drawnFrame = -1;
+    let timelineState: TimelineState = "intro";
+    let readyCalled = false;
+    let disposed = false;
+
+    const drawFrame = (index: number) => {
+      const canvas = canvasRef.current;
+      const image = cache.get(index);
+      if (!canvas || !image?.complete || !image.naturalWidth) return false;
+      drawImageCover(canvas, image);
+      drawnFrame = index;
+      if (!readyCalled) {
+        readyCalled = true;
+        onReady?.();
+      }
+      return true;
+    };
+
+    const loadFrame = (index: number) => {
+      if (index < 0 || index >= FRAME_COUNT || cache.has(index)) return;
+      const image = new Image();
+      image.decoding = "async";
+      cache.set(index, image);
+      image.addEventListener("load", () => {
+        if (disposed) return;
+        if (index === requestedFrame || drawnFrame < 0) drawFrame(index);
+      }, { once: true });
+      image.src = getFrameSource(index);
+    };
+
+    const drawClosestLoadedFrame = (target: number) => {
+      if (drawFrame(target)) return;
+      for (let distance = 1; distance < FRAME_COUNT; distance += 1) {
+        if (drawFrame(target - distance) || drawFrame(target + distance)) return;
+      }
+    };
 
     const updateTimeline = () => {
-      const video = videoRef.current;
-      if (video && Number.isFinite(video.duration) && video.duration > 0) {
-        const progress = calculateLandingProgress();
-        const finalFrame = Math.max(0, video.duration - 0.04);
-        const nextTime = progress * finalFrame;
-        if (Math.abs(video.currentTime - nextTime) > 0.016) video.currentTime = nextTime;
+      const progress = calculateLandingProgress();
+      requestedFrame = Math.round(progress * (FRAME_COUNT - 1));
+      loadFrame(requestedFrame);
+      loadFrame(requestedFrame - 1);
+      loadFrame(requestedFrame + 1);
+      loadFrame(requestedFrame - 2);
+      loadFrame(requestedFrame + 2);
+      drawClosestLoadedFrame(requestedFrame);
 
-        const timelineState = getTimelineState(progress);
-        if (timelineState !== timelineStateRef.current) {
-          timelineStateRef.current = timelineState;
-          if (containerRef.current) containerRef.current.dataset.timelineState = timelineState;
-        }
+      const nextTimelineState = getTimelineState(progress);
+      if (nextTimelineState !== timelineState) {
+        timelineState = nextTimelineState;
+        if (containerRef.current) containerRef.current.dataset.timelineState = timelineState;
       }
-      frame = 0;
+      animationFrame = 0;
     };
 
     const requestTimelineUpdate = () => {
-      if (!frame) frame = window.requestAnimationFrame(updateTimeline);
+      if (!animationFrame) animationFrame = window.requestAnimationFrame(updateTimeline);
     };
 
-    const handleMetadata = () => {
-      const video = videoRef.current;
-      if (!video) return;
-      video.pause();
-      requestTimelineUpdate();
-      if (!readyCalledRef.current) {
-        readyCalledRef.current = true;
-        onReady?.();
-      }
+    const preloadNextKeyframe = () => {
+      const next = keyframes.shift();
+      if (next === undefined || disposed) return;
+      loadFrame(next);
+      preloadTimer = window.setTimeout(preloadNextKeyframe, 140);
     };
 
-    const video = videoRef.current;
-    video?.addEventListener("loadedmetadata", handleMetadata);
-    if (video?.readyState && video.readyState >= HTMLMediaElement.HAVE_METADATA) handleMetadata();
+    loadFrame(0);
+    loadFrame(FRAME_COUNT - 1);
+    preloadTimer = window.setTimeout(preloadNextKeyframe, 350);
     window.addEventListener("scroll", requestTimelineUpdate, { passive: true });
     window.addEventListener("resize", requestTimelineUpdate, { passive: true });
     requestTimelineUpdate();
 
     return () => {
-      video?.removeEventListener("loadedmetadata", handleMetadata);
+      disposed = true;
       window.removeEventListener("scroll", requestTimelineUpdate);
       window.removeEventListener("resize", requestTimelineUpdate);
-      if (frame) window.cancelAnimationFrame(frame);
+      if (animationFrame) window.cancelAnimationFrame(animationFrame);
+      if (preloadTimer) window.clearTimeout(preloadTimer);
+      cache.clear();
     };
-  }, [containerRef, onReady, videoRef]);
+  }, [canvasRef, containerRef, onReady]);
 }
 
 export function CinematicHero({ onReady }: CinematicHeroProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  useVideoTimelineController(videoRef, containerRef, onReady);
+  useFrameSequenceController(canvasRef, containerRef, onReady);
 
   return (
     <div ref={containerRef} className="cinematic-hero" data-timeline-state="intro" aria-hidden="true">
-      <video
-        ref={videoRef}
-        className="cinematic-hero-video"
-        src="/cinematic-bird.mp4"
-        preload="auto"
-        muted
-        playsInline
-        tabIndex={-1}
-      />
+      <canvas ref={canvasRef} className="cinematic-hero-canvas" />
     </div>
   );
 }
