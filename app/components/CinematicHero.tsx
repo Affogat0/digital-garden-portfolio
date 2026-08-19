@@ -6,14 +6,29 @@ type CinematicHeroProps = {
   onReady?: () => void;
 };
 
-function calculateScrollProgress() {
-  const scrollable = document.documentElement.scrollHeight - window.innerHeight;
-  if (scrollable <= 0) return 0;
-  return Math.min(1, Math.max(0, window.scrollY / scrollable));
+type TimelineState = "intro" | "arrived" | "past";
+
+function calculateLandingProgress() {
+  const landing = document.getElementById("top");
+  if (!landing) return 0;
+  const start = landing.offsetTop;
+  const distance = Math.max(1, landing.offsetHeight);
+  return Math.min(1, Math.max(0, (window.scrollY - start) / distance));
 }
 
-function useVideoTimelineController(videoRef: MutableRefObject<HTMLVideoElement | null>, onReady?: () => void) {
+function getTimelineState(progress: number): TimelineState {
+  const laboratory = document.getElementById("laboratory");
+  if (laboratory && window.scrollY >= laboratory.offsetTop + laboratory.offsetHeight) return "past";
+  return progress >= 1 ? "arrived" : "intro";
+}
+
+function useVideoTimelineController(
+  videoRef: MutableRefObject<HTMLVideoElement | null>,
+  containerRef: MutableRefObject<HTMLDivElement | null>,
+  onReady?: () => void,
+) {
   const readyCalledRef = useRef(false);
+  const timelineStateRef = useRef<TimelineState>("intro");
 
   useEffect(() => {
     let frame = 0;
@@ -21,9 +36,16 @@ function useVideoTimelineController(videoRef: MutableRefObject<HTMLVideoElement 
     const updateTimeline = () => {
       const video = videoRef.current;
       if (video && Number.isFinite(video.duration) && video.duration > 0) {
+        const progress = calculateLandingProgress();
         const finalFrame = Math.max(0, video.duration - 0.04);
-        const nextTime = calculateScrollProgress() * finalFrame;
+        const nextTime = progress * finalFrame;
         if (Math.abs(video.currentTime - nextTime) > 0.016) video.currentTime = nextTime;
+
+        const timelineState = getTimelineState(progress);
+        if (timelineState !== timelineStateRef.current) {
+          timelineStateRef.current = timelineState;
+          if (containerRef.current) containerRef.current.dataset.timelineState = timelineState;
+        }
       }
       frame = 0;
     };
@@ -56,15 +78,16 @@ function useVideoTimelineController(videoRef: MutableRefObject<HTMLVideoElement 
       window.removeEventListener("resize", requestTimelineUpdate);
       if (frame) window.cancelAnimationFrame(frame);
     };
-  }, [onReady, videoRef]);
+  }, [containerRef, onReady, videoRef]);
 }
 
 export function CinematicHero({ onReady }: CinematicHeroProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  useVideoTimelineController(videoRef, onReady);
+  const containerRef = useRef<HTMLDivElement>(null);
+  useVideoTimelineController(videoRef, containerRef, onReady);
 
   return (
-    <div className="cinematic-hero" aria-hidden="true">
+    <div ref={containerRef} className="cinematic-hero" data-timeline-state="intro" aria-hidden="true">
       <video
         ref={videoRef}
         className="cinematic-hero-video"
