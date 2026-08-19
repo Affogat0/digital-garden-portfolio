@@ -17,6 +17,9 @@ const cameraPoints = [
 const sceneColors = ["#07100d", "#071b18", "#071522", "#152016", "#0d1027"].map(
   (color) => new THREE.Color(color),
 );
+const framingXPoints = [0, -1.15, 1.25, -1.2, 1.25];
+const framingYPoints = [2.1, 2, 2.1, 2.4, 5];
+const framingLookAhead = [12.5, 14, 15, 16, 18];
 
 const LANDING_TIMELINE_END = 0.25;
 const BIRD_FLIGHT_START = LANDING_TIMELINE_END * 0.35;
@@ -28,20 +31,16 @@ const CAMERA_SETBACK = 4.5;
 
 const journeyPathSegments = [
   {
-    points: [new THREE.Vector3(0, -1.02, 5), new THREE.Vector3(0.6, -0.96, 0), new THREE.Vector3(1.7, -0.78, -5), new THREE.Vector3(0.5, -0.96, -10)],
-    widthStart: 2.2, widthEnd: 1.8, color: "#173f36", emissive: "#4fd3aa", emissiveIntensity: 0.72, metalness: 0.58, opacity: 0.92,
+    points: [new THREE.Vector3(0, -1.02, 6), new THREE.Vector3(0.7, -0.96, 3.5), new THREE.Vector3(1.7, -0.78, 1.1)],
+    widthStart: 2.1, widthEnd: 1.65, color: "#173f36", emissive: "#4fd3aa", emissiveIntensity: 0.72, metalness: 0.58, opacity: 0.92,
   },
   {
-    points: [new THREE.Vector3(0.5, -0.96, -10), new THREE.Vector3(-1.2, -0.92, -14.5), new THREE.Vector3(-2.1, -0.86, -19), new THREE.Vector3(-0.5, -1.02, -25)],
-    widthStart: 1.8, widthEnd: 1.3, color: "#102d3d", emissive: "#3bafe1", emissiveIntensity: 0.78, metalness: 0.72, opacity: 0.9,
+    points: [new THREE.Vector3(1.7, -0.78, 1.1), new THREE.Vector3(6.6, -0.98, -1.5), new THREE.Vector3(7.7, -1.04, -6), new THREE.Vector3(6.1, -1.02, -10.5), new THREE.Vector3(2.8, -0.92, -14.5), new THREE.Vector3(2.7, -0.95, -22.8)],
+    widthStart: 1.65, widthEnd: 1.2, color: "#102d3d", emissive: "#3bafe1", emissiveIntensity: 0.78, metalness: 0.72, opacity: 0.9,
   },
   {
-    points: [new THREE.Vector3(-0.5, -1.02, -25), new THREE.Vector3(1.1, -1.08, -29), new THREE.Vector3(2.1, -1.12, -33), new THREE.Vector3(0.5, -1.08, -40)],
-    widthStart: 1.3, widthEnd: 1.05, color: "#5c432c", emissive: "#2b2115", emissiveIntensity: 0.32, metalness: 0.08, opacity: 0.96,
-  },
-  {
-    points: [new THREE.Vector3(0.5, -1.08, -40), new THREE.Vector3(-0.35, -0.3, -44), new THREE.Vector3(-1.6, 1.8, -47), new THREE.Vector3(-1.2, 5.6, -53)],
-    widthStart: 1.05, widthEnd: 0.04, color: "#7778a8", emissive: "#aaa7ef", emissiveIntensity: 0.9, metalness: 0.15, opacity: 0.42,
+    points: [new THREE.Vector3(2.7, -0.95, -22.8), new THREE.Vector3(4.7, -1.02, -24), new THREE.Vector3(5.4, -1.08, -25.2), new THREE.Vector3(3.4, -1.12, -26.5)],
+    widthStart: 1.2, widthEnd: 0.68, color: "#5c432c", emissive: "#2b2115", emissiveIntensity: 0.32, metalness: 0.08, opacity: 0.96,
   },
 ];
 
@@ -60,7 +59,11 @@ function CameraRig({ progress }: Pick<SceneProps, "progress">) {
     position.lerpVectors(cameraPoints[index], cameraPoints[index + 1], local);
     framedPosition.copy(position).add(framingOffset);
     camera.position.lerp(framedPosition, 1 - Math.exp(-delta * 2.8));
-    lookAt.set(0, 2.1, camera.position.z - 12.5);
+    lookAt.set(
+      THREE.MathUtils.lerp(framingXPoints[index], framingXPoints[index + 1], local),
+      THREE.MathUtils.lerp(framingYPoints[index], framingYPoints[index + 1], local),
+      camera.position.z - THREE.MathUtils.lerp(framingLookAhead[index], framingLookAhead[index + 1], local),
+    );
     camera.lookAt(lookAt);
     color.lerpColors(sceneColors[index], sceneColors[index + 1], local);
     scene.background?.copy(color);
@@ -263,7 +266,7 @@ function JourneyPath() {
   useEffect(() => () => geometries.forEach((geometry) => geometry.dispose()), [geometries]);
 
   return <group>{journeyPathSegments.map((segment, index) => <mesh key={segment.color} geometry={geometries[index]} receiveShadow>
-    <meshStandardMaterial color={segment.color} emissive={segment.emissive} emissiveIntensity={segment.emissiveIntensity} metalness={segment.metalness} roughness={index === 2 ? 0.92 : 0.42} transparent={segment.opacity < 1} opacity={segment.opacity} depthWrite={index !== 3} side={THREE.DoubleSide} />
+    <meshStandardMaterial color={segment.color} emissive={segment.emissive} emissiveIntensity={segment.emissiveIntensity} metalness={segment.metalness} roughness={index === 2 ? 0.92 : 0.42} transparent={segment.opacity < 1} opacity={segment.opacity} side={THREE.DoubleSide} />
   </mesh>)}</group>;
 }
 
@@ -274,7 +277,7 @@ function createHorizonGeometry(side: -1 | 1) {
 
   for (let index = 0; index <= steps; index += 1) {
     const progress = index / steps;
-    const z = THREE.MathUtils.lerp(12, -60, progress);
+    const z = THREE.MathUtils.lerp(12, -48, progress);
     const x = side * (11.5 + Math.sin(index * 1.7) * 1.2 + (index % 3) * 0.55);
     const height = 1.4 + ((index * 7) % 5) * 0.58 + Math.sin(index * 0.8) * 0.35;
     const offset = index * 6;
@@ -304,8 +307,8 @@ function DistantWorld() {
   useEffect(() => () => horizons.forEach((geometry) => geometry.dispose()), [horizons]);
 
   return <group>
-    <mesh position={[0, -1.48, -23]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-      <planeGeometry args={[70, 78]} />
+    <mesh position={[0, -1.48, -14]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+      <planeGeometry args={[70, 60]} />
       <meshStandardMaterial color="#07110f" roughness={1} metalness={0.05} />
     </mesh>
     {horizons.map((geometry, index) => <mesh key={index} geometry={geometry}>
@@ -397,7 +400,7 @@ function AISky() {
   const connections = useMemo(() => { const points: THREE.Vector3[] = []; nodes.slice(0, 20).forEach((node, i) => points.push(node, nodes[(i * 7 + 5) % nodes.length])); return points; }, [nodes]);
   const constellation = useRef<THREE.Group>(null);
   useFrame(({ clock }) => { if (constellation.current) constellation.current.rotation.y = Math.sin(clock.elapsedTime * 0.16) * 0.12; });
-  return <group position={[-1.6, 1.5, -47]}>
+  return <group position={[-1.6, 3.2, -57]} scale={1.35}>
     <group position={[0, -1.2, 1.5]}>{[[-3.2, 0, 0, 1.7], [-1.7, 0.35, 0.1, 2.1], [0, 0, 0, 2.5], [2, 0.2, 0.15, 2], [3.4, -0.1, 0, 1.45]].map(([x, y, z, scale], i) => <mesh key={i} position={[x, y, z]} scale={[scale, scale * 0.48, scale * 0.65]}><sphereGeometry args={[1, 18, 12]} /><meshPhysicalMaterial color="#a8b3dc" transparent opacity={0.12} transmission={0.6} roughness={0.4} depthWrite={false} /></mesh>)}</group>
     <group ref={constellation}>{nodes.map((position, i) => <mesh key={i} position={position}><sphereGeometry args={[i % 6 === 0 ? 0.16 : 0.065, 10, 10]} /><meshBasicMaterial color={i % 5 === 0 ? "#ffffff" : "#b8b4ff"} /></mesh>)}<LineSegments points={connections} color="#aaa7ef" opacity={0.34} /></group>
     <RisingParticles />
