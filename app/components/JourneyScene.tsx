@@ -30,6 +30,9 @@ const BIRD_HIDDEN_AT = LANDING_TIMELINE_END * 0.72;
 const CAMERA_SETBACK = 4.5;
 
 const journeyPathPoints = [
+  new THREE.Vector3(-2.5, -1.1, 28),
+  new THREE.Vector3(-2, -1.08, 20),
+  new THREE.Vector3(-1, -1.04, 12),
   new THREE.Vector3(0, -1.02, 6),
   new THREE.Vector3(0.7, -0.96, 3.5),
   new THREE.Vector3(1.7, -0.78, 1.1),
@@ -47,14 +50,19 @@ const journeyPathPoints = [
   new THREE.Vector3(0, -1.08, -46),
   new THREE.Vector3(-0.8, -1, -51),
   new THREE.Vector3(-1.2, -0.86, -55),
+  new THREE.Vector3(-1.6, -0.9, -64),
+  new THREE.Vector3(-1.9, -0.96, -76),
+  new THREE.Vector3(-2.1, -1.02, -92),
+  new THREE.Vector3(-2.2, -1.04, -112),
 ];
 
 const journeyPathColors = [
   { at: 0, color: new THREE.Color("#4fd3aa") },
-  { at: 0.34, color: new THREE.Color("#47758a") },
-  { at: 0.56, color: new THREE.Color("#4f5d63") },
-  { at: 0.74, color: new THREE.Color("#806345") },
-  { at: 1, color: new THREE.Color("#5d6873") },
+  { at: 0.25, color: new THREE.Color("#4a9a99") },
+  { at: 0.33, color: new THREE.Color("#596e74") },
+  { at: 0.39, color: new THREE.Color("#75644f") },
+  { at: 0.42, color: new THREE.Color("#8b6947") },
+  { at: 1, color: new THREE.Color("#62513c") },
 ];
 
 function CameraRig({ progress }: Pick<SceneProps, "progress">) {
@@ -252,7 +260,7 @@ function getJourneyPathColor(progress: number, target: THREE.Color) {
 
 function createJourneyPathGeometry() {
   const curve = new THREE.CatmullRomCurve3(journeyPathPoints, false, "catmullrom", 0.38);
-  const segments = 160;
+  const segments = 240;
   const positions = new Float32Array((segments + 1) * 6);
   const colors = new Float32Array((segments + 1) * 6);
   const indices: number[] = [];
@@ -265,8 +273,8 @@ function createJourneyPathGeometry() {
     const progress = index / segments;
     curve.getPointAt(progress, point);
     curve.getTangentAt(progress, tangent);
-    const taper = THREE.MathUtils.smootherstep(progress, 0.72, 1);
-    const width = THREE.MathUtils.lerp(1.5, 0.06, taper);
+    const taper = THREE.MathUtils.smootherstep(progress, 0.46, 0.9);
+    const width = THREE.MathUtils.lerp(1.5, 0.002, taper);
     side.set(-tangent.z, 0, tangent.x).normalize().multiplyScalar(width * 0.5);
     const offset = index * 6;
     positions[offset] = point.x + side.x;
@@ -344,8 +352,8 @@ function DistantWorld() {
   useEffect(() => () => horizons.forEach((geometry) => geometry.dispose()), [horizons]);
 
   return <group>
-    <mesh position={[0, -1.48, -20]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-      <planeGeometry args={[70, 72]} />
+    <mesh position={[0, -1.48, -44]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+      <planeGeometry args={[70, 144]} />
       <meshStandardMaterial color="#07110f" roughness={1} metalness={0.05} />
     </mesh>
     {horizons.map((geometry, index) => <mesh key={index} geometry={geometry}>
@@ -418,7 +426,6 @@ function BambooForest() {
   const bamboo = useMemo(() => Array.from({ length: 30 }, (_, i) => ({ x: (i % 2 ? 1 : -1) * (2.1 + ((i * 31) % 15) * 0.22), z: ((i * 19) % 21 - 10) * 0.38, height: 4.6 + (i % 7) * 0.48, lean: ((i % 5) - 2) * 0.018 })), []);
   return <group position={[2.1, -1.2, -33]}>
     <mesh position={[0, 0, 0]} rotation={[-Math.PI / 2, 0, 0]}><planeGeometry args={[12, 13]} /><meshStandardMaterial color="#172318" roughness={1} /></mesh>
-    <mesh position={[0, 0.035, 0.4]} rotation={[-Math.PI / 2, 0, 0]}><planeGeometry args={[2.5, 12]} /><meshStandardMaterial color="#6b5133" roughness={0.95} /></mesh>
     {bamboo.map((stem, i) => <group key={i} position={[stem.x, stem.height / 2, stem.z]} rotation={[0, 0, stem.lean]}><mesh castShadow><cylinderGeometry args={[0.09, 0.14, stem.height, 8]} /><meshStandardMaterial color={i % 3 ? "#496b36" : "#759447"} roughness={0.9} /></mesh>{[-0.28, 0.12, 0.48].map((offset, ring) => <mesh key={ring} position={[0, offset * stem.height, 0]}><torusGeometry args={[0.125, 0.018, 4, 8]} /><meshStandardMaterial color="#9bb568" /></mesh>)}{i % 3 === 0 && <mesh position={[stem.x > 0 ? -0.36 : 0.36, stem.height * 0.25, 0]} rotation={[0, 0, stem.x > 0 ? -0.7 : 0.7]}><planeGeometry args={[0.75, 0.22]} /><meshStandardMaterial color="#759a4d" side={THREE.DoubleSide} /></mesh>}</group>)}
     <Lantern position={[-1.55, 0, 1.8]} /><Lantern position={[1.55, 0, -1.1]} /><Lantern position={[-1.55, 0, -3.7]} />
     <pointLight color="#d7ee7d" intensity={10} distance={13} position={[0, 5, 1]} />
