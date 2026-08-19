@@ -18,13 +18,18 @@ const sceneColors = ["#07100d", "#071b18", "#071522", "#152016", "#0d1027"].map(
   (color) => new THREE.Color(color),
 );
 
-const guidePoints = [
-  new THREE.Vector3(0, 2.4, 10.5),
-  new THREE.Vector3(0.8, 2.2, -4.5),
-  new THREE.Vector3(-0.6, 2.5, -18.5),
-  new THREE.Vector3(0.7, 2.5, -32.5),
-  new THREE.Vector3(-0.4, 3.6, -46.5),
-];
+const guideFlightPath = new THREE.CatmullRomCurve3([
+  new THREE.Vector3(-0.8, 2.5, 10.5),
+  new THREE.Vector3(1.8, 2.9, 5),
+  new THREE.Vector3(5.5, 3.4, -3.8),
+  new THREE.Vector3(1.2, 2.4, -6.4),
+  new THREE.Vector3(-5.5, 3.3, -13),
+  new THREE.Vector3(-1.1, 2.4, -18.4),
+  new THREE.Vector3(5.5, 3.6, -25),
+  new THREE.Vector3(0.8, 2.7, -33.5),
+  new THREE.Vector3(-5.6, 4.3, -41),
+  new THREE.Vector3(-0.4, 3.7, -46.5),
+], false, "catmullrom", 0.32);
 
 function CameraRig({ progress }: Pick<SceneProps, "progress">) {
   const { camera, scene } = useThree();
@@ -53,65 +58,88 @@ function GuideBird({ progress }: Pick<SceneProps, "progress">) {
   const leftWing = useRef<THREE.Group>(null);
   const rightWing = useRef<THREE.Group>(null);
   const position = useRef(new THREE.Vector3());
+  const tangent = useRef(new THREE.Vector3());
   const elapsed = useRef(0);
   const wingGeometry = useMemo(() => {
     const shape = new THREE.Shape();
-    shape.moveTo(0, 0.04);
-    shape.bezierCurveTo(-0.42, 0.44, -1.05, 0.62, -1.58, 0.4);
-    shape.bezierCurveTo(-1.2, 0.18, -0.92, -0.12, -0.66, -0.3);
-    shape.bezierCurveTo(-0.4, -0.16, -0.18, -0.02, 0, 0.04);
-    return new THREE.ShapeGeometry(shape, 16);
+    shape.moveTo(0, 0.02);
+    shape.lineTo(-0.58, 0.32);
+    shape.lineTo(-1.72, 0.56);
+    shape.lineTo(-1.18, 0.02);
+    shape.lineTo(-0.62, -0.34);
+    shape.lineTo(-0.2, -0.1);
+    shape.closePath();
+    return new THREE.ShapeGeometry(shape);
+  }, []);
+  const wingFacetGeometry = useMemo(() => {
+    const shape = new THREE.Shape();
+    shape.moveTo(-0.58, 0.32);
+    shape.lineTo(-1.72, 0.56);
+    shape.lineTo(-1.18, 0.02);
+    shape.closePath();
+    return new THREE.ShapeGeometry(shape);
   }, []);
   const bodyGeometry = useMemo(() => {
     const shape = new THREE.Shape();
-    shape.moveTo(0, 0.34);
-    shape.bezierCurveTo(0.23, 0.24, 0.31, 0.04, 0.28, -0.18);
-    shape.bezierCurveTo(0.2, -0.42, 0.09, -0.64, 0, -0.82);
-    shape.bezierCurveTo(-0.09, -0.64, -0.2, -0.42, -0.28, -0.18);
-    shape.bezierCurveTo(-0.31, 0.04, -0.23, 0.24, 0, 0.34);
-    return new THREE.ShapeGeometry(shape, 16);
+    shape.moveTo(0, 0.38);
+    shape.lineTo(0.24, 0.02);
+    shape.lineTo(0.09, -0.5);
+    shape.lineTo(0, -0.88);
+    shape.lineTo(-0.09, -0.5);
+    shape.lineTo(-0.24, 0.02);
+    shape.closePath();
+    return new THREE.ShapeGeometry(shape);
   }, []);
   const tailGeometry = useMemo(() => {
     const shape = new THREE.Shape();
     shape.moveTo(0, 0);
-    shape.bezierCurveTo(0.18, -0.28, 0.25, -0.52, 0.2, -0.7);
-    shape.lineTo(0, -0.5);
-    shape.lineTo(-0.2, -0.7);
-    shape.bezierCurveTo(-0.25, -0.52, -0.18, -0.28, 0, 0);
-    return new THREE.ShapeGeometry(shape, 12);
+    shape.lineTo(0.3, -0.68);
+    shape.lineTo(0, -0.48);
+    shape.lineTo(-0.3, -0.68);
+    shape.closePath();
+    return new THREE.ShapeGeometry(shape);
   }, []);
 
   useEffect(() => () => {
     wingGeometry.dispose();
+    wingFacetGeometry.dispose();
     bodyGeometry.dispose();
     tailGeometry.dispose();
-  }, [bodyGeometry, tailGeometry, wingGeometry]);
+  }, [bodyGeometry, tailGeometry, wingFacetGeometry, wingGeometry]);
 
   useFrame((_, delta) => {
     elapsed.current += delta;
-    const scaled = progress.current * (guidePoints.length - 1);
-    const index = Math.min(guidePoints.length - 2, Math.floor(scaled));
-    const local = THREE.MathUtils.smootherstep(scaled - index, 0, 1);
-    position.current.lerpVectors(guidePoints[index], guidePoints[index + 1], local);
-    position.current.y += Math.sin(elapsed.current * 1.8) * 0.08;
+    const journey = THREE.MathUtils.clamp(progress.current, 0, 1);
+    guideFlightPath.getPoint(journey, position.current);
+    guideFlightPath.getTangent(journey, tangent.current);
+    position.current.y += Math.sin(elapsed.current * 1.55) * 0.09;
 
     if (bird.current) {
-      bird.current.position.lerp(position.current, 1 - Math.exp(-delta * 4));
+      bird.current.position.lerp(position.current, 1 - Math.exp(-delta * 3.3));
       bird.current.quaternion.copy(camera.quaternion);
-      bird.current.rotateZ(Math.sin(progress.current * Math.PI * 4) * 0.06);
+      const bank = THREE.MathUtils.clamp(-tangent.current.x * 0.22, -0.24, 0.24);
+      bird.current.rotateZ(bank + Math.sin(elapsed.current * 0.8) * 0.025);
+      const breath = 0.64 + Math.sin(elapsed.current * 1.35) * 0.012;
+      bird.current.scale.setScalar(breath);
     }
 
-    const flap = Math.sin(elapsed.current * (3.2 + progress.current * 1.8)) * 0.2;
-    if (leftWing.current) leftWing.current.rotation.z = 0.04 + flap;
-    if (rightWing.current) rightWing.current.rotation.z = -0.04 - flap;
+    const flap = Math.sin(elapsed.current * (2.7 + journey * 1.2)) * 0.13;
+    if (leftWing.current) leftWing.current.rotation.z = 0.025 + flap;
+    if (rightWing.current) rightWing.current.rotation.z = -0.025 - flap;
   });
 
-  return <group ref={bird} position={guidePoints[0]} scale={0.62}>
-    <group ref={leftWing}><mesh geometry={wingGeometry}><meshBasicMaterial color="#ffffff" transparent opacity={0.94} side={THREE.DoubleSide} toneMapped={false} /></mesh></group>
-    <group ref={rightWing} scale={[-1, 1, 1]}><mesh geometry={wingGeometry}><meshBasicMaterial color="#ffffff" transparent opacity={0.94} side={THREE.DoubleSide} toneMapped={false} /></mesh></group>
-    <mesh geometry={bodyGeometry} position={[0, 0.02, 0.012]}><meshBasicMaterial color="#ffffff" side={THREE.DoubleSide} toneMapped={false} /></mesh>
-    <mesh geometry={tailGeometry} position={[0, -0.5, 0.008]}><meshBasicMaterial color="#f4f7ff" transparent opacity={0.9} side={THREE.DoubleSide} toneMapped={false} /></mesh>
-    <pointLight color="#e7f4ff" intensity={2.5} distance={2.8} position={[0, 0, 0.4]} />
+  return <group ref={bird} position={guideFlightPath.points[0]} scale={0.64}>
+    <group ref={leftWing}>
+      <mesh geometry={wingGeometry}><meshBasicMaterial color="#ffffff" side={THREE.DoubleSide} toneMapped={false} /></mesh>
+      <mesh geometry={wingFacetGeometry} position={[0, 0, 0.012]}><meshBasicMaterial color="#dce5ed" transparent opacity={0.62} side={THREE.DoubleSide} toneMapped={false} /></mesh>
+    </group>
+    <group ref={rightWing} scale={[-1, 1, 1]}>
+      <mesh geometry={wingGeometry}><meshBasicMaterial color="#ffffff" side={THREE.DoubleSide} toneMapped={false} /></mesh>
+      <mesh geometry={wingFacetGeometry} position={[0, 0, 0.012]}><meshBasicMaterial color="#eef3f6" transparent opacity={0.5} side={THREE.DoubleSide} toneMapped={false} /></mesh>
+    </group>
+    <mesh geometry={bodyGeometry} position={[0, 0.01, 0.024]}><meshBasicMaterial color="#ffffff" side={THREE.DoubleSide} toneMapped={false} /></mesh>
+    <mesh geometry={tailGeometry} position={[0, -0.48, 0.018]}><meshBasicMaterial color="#edf2f6" side={THREE.DoubleSide} toneMapped={false} /></mesh>
+    <pointLight color="#e7f4ff" intensity={1.8} distance={2.4} position={[0, 0, 0.4]} />
   </group>;
 }
 
