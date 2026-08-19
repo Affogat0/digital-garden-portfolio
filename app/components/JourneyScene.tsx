@@ -6,142 +6,166 @@ import * as THREE from "three";
 
 type SceneProps = { progress: MutableRefObject<number>; onReady: () => void };
 
-const cameraPoints = [
-  new THREE.Vector3(0, 9, 17),
-  new THREE.Vector3(1.5, 4.8, 2),
-  new THREE.Vector3(-2.8, 4.4, -12),
-  new THREE.Vector3(2.7, 4.1, -27),
-  new THREE.Vector3(-1.8, 7, -41),
-];
+const flightCurve = new THREE.CatmullRomCurve3([
+  new THREE.Vector3(0, 2.2, 6),
+  new THREE.Vector3(1.8, 3.6, -4),
+  new THREE.Vector3(-2.6, 4.4, -16),
+  new THREE.Vector3(2.2, 4.1, -30),
+  new THREE.Vector3(-1.8, 5.8, -44),
+  new THREE.Vector3(0, 8.5, -58),
+]);
 
-const sceneColors = ["#07100d", "#071b18", "#071522", "#152016", "#0d1027"].map(
-  (color) => new THREE.Color(color),
-);
+const skyColors = ["#07100d", "#0a1b20", "#10202b", "#17231c", "#11152d"].map((color) => new THREE.Color(color));
 
-function CameraRig({ progress }: Pick<SceneProps, "progress">) {
+function Bird({ root, leftWing, rightWing }: { root: React.RefObject<THREE.Group | null>; leftWing: React.RefObject<THREE.Group | null>; rightWing: React.RefObject<THREE.Group | null> }) {
+  return <group ref={root}>
+    <mesh scale={[0.24, 0.16, 0.72]}><sphereGeometry args={[1, 18, 12]} /><meshStandardMaterial color="#ffffff" emissive="#dcecff" emissiveIntensity={0.65} roughness={0.28} /></mesh>
+    <mesh position={[0, 0.06, -0.67]}><sphereGeometry args={[0.17, 14, 10]} /><meshStandardMaterial color="#ffffff" emissive="#eaf3ff" emissiveIntensity={0.5} /></mesh>
+    <mesh position={[0, 0.04, -0.89]} rotation={[-Math.PI / 2, 0, 0]}><coneGeometry args={[0.055, 0.28, 6]} /><meshStandardMaterial color="#e8d6a8" /></mesh>
+    <group ref={leftWing} position={[-0.16, 0.04, -0.02]} rotation={[0, 0.08, 0.16]}>
+      <mesh position={[-0.56, 0, 0.08]} rotation={[0, 0, Math.PI / 2]} scale={[0.24, 0.82, 0.1]}><coneGeometry args={[1, 1.4, 3]} /><meshStandardMaterial color="#ffffff" emissive="#dbe8ff" emissiveIntensity={0.42} side={THREE.DoubleSide} /></mesh>
+    </group>
+    <group ref={rightWing} position={[0.16, 0.04, -0.02]} rotation={[0, -0.08, -0.16]}>
+      <mesh position={[0.56, 0, 0.08]} rotation={[0, 0, -Math.PI / 2]} scale={[0.24, 0.82, 0.1]}><coneGeometry args={[1, 1.4, 3]} /><meshStandardMaterial color="#ffffff" emissive="#dbe8ff" emissiveIntensity={0.42} side={THREE.DoubleSide} /></mesh>
+    </group>
+    <mesh position={[-0.12, 0, 0.64]} rotation={[Math.PI / 2, 0, 0.24]} scale={[0.13, 0.38, 0.08]}><coneGeometry args={[1, 1.3, 3]} /><meshStandardMaterial color="#f3f6ff" /></mesh>
+    <mesh position={[0.12, 0, 0.64]} rotation={[Math.PI / 2, 0, -0.24]} scale={[0.13, 0.38, 0.08]}><coneGeometry args={[1, 1.3, 3]} /><meshStandardMaterial color="#f3f6ff" /></mesh>
+  </group>;
+}
+
+function FlightRig({ progress }: Pick<SceneProps, "progress">) {
   const { camera, scene } = useThree();
-  const position = useMemo(() => new THREE.Vector3(), []);
-  const lookAt = useMemo(() => new THREE.Vector3(), []);
+  const bird = useRef<THREE.Group>(null);
+  const leftWing = useRef<THREE.Group>(null);
+  const rightWing = useRef<THREE.Group>(null);
+  const birdPosition = useMemo(() => new THREE.Vector3(), []);
+  const ahead = useMemo(() => new THREE.Vector3(), []);
+  const thirdPerson = useMemo(() => new THREE.Vector3(), []);
+  const firstPerson = useMemo(() => new THREE.Vector3(), []);
+  const cameraTarget = useMemo(() => new THREE.Vector3(), []);
   const color = useMemo(() => new THREE.Color(), []);
+  const elapsed = useRef(0);
 
   useFrame((_, delta) => {
-    const scaled = progress.current * (cameraPoints.length - 1);
-    const index = Math.min(cameraPoints.length - 2, Math.floor(scaled));
-    const local = THREE.MathUtils.smootherstep(scaled - index, 0, 1);
-    position.lerpVectors(cameraPoints[index], cameraPoints[index + 1], local);
-    camera.position.lerp(position, 1 - Math.exp(-delta * 2.8));
-    lookAt.set(0, 1.5, camera.position.z - 7.5);
-    camera.lookAt(lookAt);
-    color.lerpColors(sceneColors[index], sceneColors[index + 1], local);
+    elapsed.current += delta;
+    const journey = THREE.MathUtils.clamp(progress.current, 0, 1);
+    const eased = THREE.MathUtils.smootherstep(journey, 0, 1);
+    const viewpoint = THREE.MathUtils.smoothstep(journey, 0.045, 0.17);
+
+    flightCurve.getPointAt(eased, birdPosition);
+    flightCurve.getPointAt(Math.min(1, eased + 0.025), ahead);
+
+    if (bird.current) {
+      bird.current.position.copy(birdPosition);
+      bird.current.lookAt(ahead);
+      bird.current.rotateY(Math.PI);
+      bird.current.rotation.z += Math.sin(journey * Math.PI * 5) * 0.002;
+      bird.current.visible = viewpoint < 0.985;
+      const birdScale = 0.9 - viewpoint * 0.48;
+      bird.current.scale.setScalar(birdScale);
+    }
+
+    const flap = Math.sin(elapsed.current * (3.4 + journey * 5.5)) * (0.18 + Math.min(1, journey * 14) * 0.48);
+    if (leftWing.current) leftWing.current.rotation.z = 0.16 + flap;
+    if (rightWing.current) rightWing.current.rotation.z = -0.16 - flap;
+
+    thirdPerson.copy(birdPosition).add(new THREE.Vector3(0, 1.8, 6.4));
+    firstPerson.copy(birdPosition).add(new THREE.Vector3(0, 0.2, 0.48));
+    thirdPerson.lerp(firstPerson, viewpoint);
+    camera.position.lerp(thirdPerson, 1 - Math.exp(-delta * 3.1));
+    cameraTarget.lerpVectors(birdPosition, ahead, viewpoint);
+    camera.lookAt(cameraTarget);
+
+    const palettePosition = journey * (skyColors.length - 1);
+    const paletteIndex = Math.min(skyColors.length - 2, Math.floor(palettePosition));
+    color.lerpColors(skyColors[paletteIndex], skyColors[paletteIndex + 1], palettePosition - paletteIndex);
     scene.background?.copy(color);
     if (scene.fog instanceof THREE.Fog) scene.fog.color.copy(color);
   });
-  return null;
+
+  return <Bird root={bird} leftWing={leftWing} rightWing={rightWing} />;
 }
 
-function LineSegments({ points, color, opacity = 0.45 }: { points: THREE.Vector3[]; color: string; opacity?: number }) {
-  const geometry = useMemo(() => new THREE.BufferGeometry().setFromPoints(points), [points]);
-  useEffect(() => () => geometry.dispose(), [geometry]);
-  return <lineSegments geometry={geometry}><lineBasicMaterial color={color} transparent opacity={opacity} /></lineSegments>;
-}
-
-function CellField() {
-  const group = useRef<THREE.Group>(null);
-  const cells = useMemo(() => Array.from({ length: 13 }, (_, i) => ({
-    position: [((i * 37) % 17 - 8) * 0.48, 0.8 + ((i * 23) % 11) * 0.34, ((i * 19) % 9 - 4) * 0.45] as [number, number, number],
-    scale: 0.08 + (i % 4) * 0.035,
-  })), []);
-  useFrame(({ clock }) => {
-    if (group.current) group.current.rotation.y = Math.sin(clock.elapsedTime * 0.2) * 0.08;
-  });
-  return <group ref={group}>{cells.map((cell, i) => <mesh key={i} position={cell.position} scale={cell.scale}><icosahedronGeometry args={[1, 1]} /><meshPhysicalMaterial color={i % 3 ? "#8ff3c3" : "#d7fff0"} emissive="#226a4a" emissiveIntensity={1.3} roughness={0.25} transmission={0.22} /></mesh>)}</group>;
-}
-
-function Laboratory() {
-  const dataLines = useMemo(() => Array.from({ length: 7 }, (_, i) => new THREE.Vector3(2.85 + i * 0.15, 0.35, -1.2 + (i % 3) * 0.22)), []);
-  return <group position={[1.7, -0.9, -5]}>
-    <mesh position={[0, -0.12, 0]} receiveShadow><cylinderGeometry args={[5.6, 6.1, 0.35, 48]} /><meshStandardMaterial color="#102d28" metalness={0.45} roughness={0.5} /></mesh>
-    <gridHelper args={[11, 16, "#69d7b0", "#173d35"]} position={[0, 0.08, 0]} />
-    <group position={[0.2, 1.7, 0]}>
-      <mesh position={[0, 1.25, 0]}><cylinderGeometry args={[3.25, 3.25, 2.5, 10, 1, true]} /><meshPhysicalMaterial color="#7ce7c3" transparent opacity={0.13} transmission={0.72} roughness={0.12} side={THREE.DoubleSide} depthWrite={false} /></mesh>
-      {Array.from({ length: 10 }, (_, i) => { const angle = (i / 10) * Math.PI * 2; return <mesh key={i} position={[Math.cos(angle) * 3.25, 1.25, Math.sin(angle) * 3.25]}><boxGeometry args={[0.055, 2.55, 0.055]} /><meshBasicMaterial color="#94f5d0" transparent opacity={0.65} /></mesh>; })}
-      <mesh position={[0, 2.55, 0]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[3.25, 0.055, 8, 48]} /><meshBasicMaterial color="#8ef0ca" transparent opacity={0.7} /></mesh>
-    </group>
-    <group position={[0, 1.55, 0]}>
-      <mesh><cylinderGeometry args={[0.82, 0.82, 2.8, 32]} /><meshPhysicalMaterial color="#baffdf" transparent opacity={0.28} transmission={0.65} roughness={0.08} /></mesh>
-      <mesh position={[0, -0.9, 0]}><cylinderGeometry args={[0.68, 0.68, 0.8, 32]} /><meshPhysicalMaterial color="#8cf1c7" emissive="#237854" emissiveIntensity={2.2} transparent opacity={0.72} /></mesh>
-      {[0, 1, 2].map((ring) => <mesh key={ring} rotation={[ring * 0.65, ring * 0.9, 0.25]}><torusGeometry args={[1.25 + ring * 0.35, 0.018, 6, 64]} /><meshBasicMaterial color="#abffdf" transparent opacity={0.55 - ring * 0.12} /></mesh>)}
-    </group>
-    <group position={[-2.65, 1.5, 0.45]} rotation={[0, 0.35, 0]}>
-      <mesh><boxGeometry args={[1.75, 1.15, 0.08]} /><meshPhysicalMaterial color="#80e9ca" transparent opacity={0.2} transmission={0.65} /></mesh>
-      {[-0.34, 0, 0.34].map((y, i) => <mesh key={i} position={[0, y, 0.055]}><boxGeometry args={[1.35 - i * 0.18, 0.035, 0.02]} /><meshBasicMaterial color={i === 1 ? "#ffffff" : "#8ff2cf"} /></mesh>)}
-      <mesh position={[0.48, -0.08, 0.06]}><circleGeometry args={[0.23, 24]} /><meshBasicMaterial color="#9df7c5" transparent opacity={0.5} wireframe /></mesh>
-    </group>
-    <group position={[3.2, 0, -0.7]}>{dataLines.map((position, i) => <mesh key={i} position={position} scale={[1, 1 + (i % 4) * 0.7, 1]}><cylinderGeometry args={[0.018, 0.018, 0.8, 5]} /><meshBasicMaterial color="#a4ffdb" transparent opacity={0.55} /></mesh>)}</group>
-    <CellField />
-    <pointLight color="#9df7c5" intensity={22} distance={12} position={[0, 3.5, 1]} />
-  </group>;
-}
-
-function SoftwareCity() {
-  const buildings = useMemo(() => Array.from({ length: 17 }, (_, i) => ({ x: (i % 5 - 2) * 1.35, z: (Math.floor(i / 5) - 1.4) * 1.55, height: 1.6 + ((i * 7) % 6) * 0.62, width: 0.78 + (i % 3) * 0.12 })), []);
-  const network = useMemo(() => { const points: THREE.Vector3[] = []; buildings.slice(0, 12).forEach((building, i) => { const next = buildings[(i * 5 + 3) % buildings.length]; points.push(new THREE.Vector3(building.x, building.height + 0.15, building.z), new THREE.Vector3(next.x, next.height + 0.15, next.z)); }); return points; }, [buildings]);
-  return <group position={[-2.1, -1, -19]}>
-    <mesh position={[0, -0.08, 0]}><boxGeometry args={[9.5, 0.22, 8]} /><meshStandardMaterial color="#091822" metalness={0.65} roughness={0.4} /></mesh>
-    <gridHelper args={[10, 20, "#4eb8ed", "#122e3c"]} />
-    {buildings.map((building, i) => <group key={i} position={[building.x, 0, building.z]}>
-      <mesh position={[0, building.height / 2, 0]} castShadow><boxGeometry args={[building.width, building.height, building.width]} /><meshStandardMaterial color={i % 5 === 0 ? "#163f56" : "#102935"} emissive="#071a24" emissiveIntensity={0.75} metalness={0.6} roughness={0.3} /></mesh>
-      {Array.from({ length: Math.min(6, Math.floor(building.height / 0.55)) }, (_, row) => <mesh key={row} position={[0, 0.45 + row * 0.52, building.width / 2 + 0.006]}><boxGeometry args={[building.width * 0.62, 0.075, 0.012]} /><meshBasicMaterial color={(row + i) % 4 === 0 ? "#e4fbff" : "#69cdf8"} transparent opacity={0.8} /></mesh>)}
-      <mesh position={[0, building.height + 0.12, 0]}><sphereGeometry args={[0.07, 8, 8]} /><meshBasicMaterial color="#a9e7ff" /></mesh>
-    </group>)}
-    <LineSegments points={network} color="#75ccff" opacity={0.3} />
-    <group position={[3.65, 1.25, 1.3]}><mesh><boxGeometry args={[1.4, 2.5, 1]} /><meshStandardMaterial color="#0b202b" metalness={0.75} roughness={0.25} /></mesh>{Array.from({ length: 7 }, (_, i) => <mesh key={i} position={[0, 0.85 - i * 0.27, 0.51]}><boxGeometry args={[1.08, 0.11, 0.025]} /><meshBasicMaterial color={i % 3 ? "#3e9ec9" : "#d2f5ff"} /></mesh>)}</group>
-    {[[-3.5, 0.05, 2.7], [0, 0.055, 2.7], [3.5, 0.05, 2.7]].map((position, i) => <mesh key={i} position={position as [number, number, number]}><boxGeometry args={[2.5, 0.035, 0.08]} /><meshBasicMaterial color="#69cfff" transparent opacity={0.65} /></mesh>)}
-    <pointLight color="#76c7ff" intensity={24} distance={13} position={[0, 5, 2]} />
-  </group>;
-}
-
-function Lantern({ position }: { position: [number, number, number] }) {
-  return <group position={position}><mesh position={[0, 1.05, 0]}><cylinderGeometry args={[0.025, 0.025, 2.1, 6]} /><meshStandardMaterial color="#281c12" /></mesh><mesh position={[0, 2.08, 0]}><boxGeometry args={[0.55, 0.5, 0.55]} /><meshStandardMaterial color="#ffbd68" emissive="#ff8a33" emissiveIntensity={3.2} transparent opacity={0.82} /></mesh><mesh position={[0, 2.38, 0]}><boxGeometry args={[0.62, 0.06, 0.62]} /><meshStandardMaterial color="#2b1b11" /></mesh><pointLight color="#ffad5c" intensity={9} distance={5} position={[0, 2, 0]} /></group>;
-}
-
-function BambooForest() {
-  const bamboo = useMemo(() => Array.from({ length: 30 }, (_, i) => ({ x: (i % 2 ? 1 : -1) * (2.1 + ((i * 31) % 15) * 0.22), z: ((i * 19) % 21 - 10) * 0.38, height: 4.6 + (i % 7) * 0.48, lean: ((i % 5) - 2) * 0.018 })), []);
-  return <group position={[2.1, -1.2, -33]}>
-    <mesh position={[0, 0, 0]} rotation={[-Math.PI / 2, 0, 0]}><planeGeometry args={[12, 13]} /><meshStandardMaterial color="#172318" roughness={1} /></mesh>
-    <mesh position={[0, 0.035, 0.4]} rotation={[-Math.PI / 2, 0, 0]}><planeGeometry args={[2.5, 12]} /><meshStandardMaterial color="#6b5133" roughness={0.95} /></mesh>
-    {bamboo.map((stem, i) => <group key={i} position={[stem.x, stem.height / 2, stem.z]} rotation={[0, 0, stem.lean]}><mesh castShadow><cylinderGeometry args={[0.09, 0.14, stem.height, 8]} /><meshStandardMaterial color={i % 3 ? "#496b36" : "#759447"} roughness={0.9} /></mesh>{[-0.28, 0.12, 0.48].map((offset, ring) => <mesh key={ring} position={[0, offset * stem.height, 0]}><torusGeometry args={[0.125, 0.018, 4, 8]} /><meshStandardMaterial color="#9bb568" /></mesh>)}{i % 3 === 0 && <mesh position={[stem.x > 0 ? -0.36 : 0.36, stem.height * 0.25, 0]} rotation={[0, 0, stem.x > 0 ? -0.7 : 0.7]}><planeGeometry args={[0.75, 0.22]} /><meshStandardMaterial color="#759a4d" side={THREE.DoubleSide} /></mesh>}</group>)}
-    <Lantern position={[-1.55, 0, 1.8]} /><Lantern position={[1.55, 0, -1.1]} /><Lantern position={[-1.55, 0, -3.7]} />
-    <pointLight color="#d7ee7d" intensity={10} distance={13} position={[0, 5, 1]} />
-  </group>;
-}
-
-function RisingParticles() {
+function WindParticles() {
   const points = useRef<THREE.Points>(null);
-  const positions = useMemo(() => { const values = new Float32Array(42 * 3); for (let i = 0; i < 42; i += 1) { values[i * 3] = ((i * 37) % 23 - 11) * 0.34; values[i * 3 + 1] = ((i * 17) % 31) * 0.24 - 1.5; values[i * 3 + 2] = ((i * 29) % 17 - 8) * 0.3; } return values; }, []);
-  useFrame((_, delta) => { const attribute = points.current?.geometry.getAttribute("position") as THREE.BufferAttribute | undefined; if (!attribute) return; for (let i = 0; i < attribute.count; i += 1) { const next = attribute.getY(i) + delta * (0.16 + (i % 5) * 0.025); attribute.setY(i, next > 6 ? -1.5 : next); } attribute.needsUpdate = true; });
-  return <points ref={points}><bufferGeometry><bufferAttribute attach="attributes-position" args={[positions, 3]} /></bufferGeometry><pointsMaterial color="#c6c3ff" size={0.075} transparent opacity={0.7} sizeAttenuation /></points>;
+  const positions = useMemo(() => {
+    const values = new Float32Array(80 * 3);
+    for (let i = 0; i < 80; i += 1) {
+      values[i * 3] = ((i * 37) % 31 - 15) * 0.42;
+      values[i * 3 + 1] = ((i * 19) % 23 - 5) * 0.35;
+      values[i * 3 + 2] = 10 - ((i * 29) % 73);
+    }
+    return values;
+  }, []);
+  useFrame((_, delta) => {
+    const attribute = points.current?.geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+    if (!attribute) return;
+    for (let i = 0; i < attribute.count; i += 1) {
+      const z = attribute.getZ(i) + delta * (0.8 + (i % 5) * 0.18);
+      attribute.setZ(i, z > 12 ? -62 : z);
+    }
+    attribute.needsUpdate = true;
+  });
+  return <points ref={points}><bufferGeometry><bufferAttribute attach="attributes-position" args={[positions, 3]} /></bufferGeometry><pointsMaterial color="#e8f4ff" size={0.035} transparent opacity={0.46} sizeAttenuation /></points>;
 }
 
-function AISky() {
-  const nodes = useMemo(() => Array.from({ length: 26 }, (_, i) => new THREE.Vector3(((i * 37) % 19 - 9) * 0.48, ((i * 23) % 13 - 4) * 0.38, ((i * 17) % 11 - 5) * 0.42)), []);
-  const connections = useMemo(() => { const points: THREE.Vector3[] = []; nodes.slice(0, 20).forEach((node, i) => points.push(node, nodes[(i * 7 + 5) % nodes.length])); return points; }, [nodes]);
-  const constellation = useRef<THREE.Group>(null);
-  useFrame(({ clock }) => { if (constellation.current) constellation.current.rotation.y = Math.sin(clock.elapsedTime * 0.16) * 0.12; });
-  return <group position={[-1.6, 1.5, -47]}>
-    <group position={[0, -1.2, 1.5]}>{[[-3.2, 0, 0, 1.7], [-1.7, 0.35, 0.1, 2.1], [0, 0, 0, 2.5], [2, 0.2, 0.15, 2], [3.4, -0.1, 0, 1.45]].map(([x, y, z, scale], i) => <mesh key={i} position={[x, y, z]} scale={[scale, scale * 0.48, scale * 0.65]}><sphereGeometry args={[1, 18, 12]} /><meshPhysicalMaterial color="#a8b3dc" transparent opacity={0.12} transmission={0.6} roughness={0.4} depthWrite={false} /></mesh>)}</group>
-    <group ref={constellation}>{nodes.map((position, i) => <mesh key={i} position={position}><sphereGeometry args={[i % 6 === 0 ? 0.16 : 0.065, 10, 10]} /><meshBasicMaterial color={i % 5 === 0 ? "#ffffff" : "#b8b4ff"} /></mesh>)}<LineSegments points={connections} color="#aaa7ef" opacity={0.34} /></group>
-    <RisingParticles />
-    <mesh position={[0, 0.5, 0]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[3.6, 0.012, 4, 96]} /><meshBasicMaterial color="#7773d8" transparent opacity={0.25} /></mesh>
-    <pointLight color="#b8b4ff" intensity={30} distance={16} position={[0, 4, 2]} />
+function Cloud({ position, scale = 1 }: { position: [number, number, number]; scale?: number }) {
+  return <group position={position} scale={scale}>
+    <mesh scale={[1.8, 0.55, 0.8]}><sphereGeometry args={[1, 14, 9]} /><meshPhysicalMaterial color="#dce8ef" transparent opacity={0.1} transmission={0.5} depthWrite={false} /></mesh>
+    <mesh position={[1.15, 0.18, 0]} scale={[1.1, 0.68, 0.75]}><sphereGeometry args={[1, 14, 9]} /><meshPhysicalMaterial color="#f0f6f8" transparent opacity={0.09} transmission={0.55} depthWrite={false} /></mesh>
+    <mesh position={[-1.05, 0.08, 0.12]} scale={[0.9, 0.5, 0.65]}><sphereGeometry args={[1, 14, 9]} /><meshPhysicalMaterial color="#d9e6ec" transparent opacity={0.08} transmission={0.5} depthWrite={false} /></mesh>
+  </group>;
+}
+
+function LaboratoryMarker() {
+  return <group position={[2.3, -1, -8]}>
+    <mesh><cylinderGeometry args={[4.2, 4.8, 0.35, 32]} /><meshStandardMaterial color="#17352f" metalness={0.4} /></mesh>
+    <mesh position={[0, 1.5, 0]}><sphereGeometry args={[2.8, 24, 14, 0, Math.PI * 2, 0, Math.PI / 2]} /><meshPhysicalMaterial color="#91e8cf" transparent opacity={0.12} transmission={0.72} wireframe /></mesh>
+    <mesh position={[0, 1, 0]}><cylinderGeometry args={[0.55, 0.55, 2, 18]} /><meshStandardMaterial color="#9df7c5" emissive="#2a7c59" emissiveIntensity={1.8} transparent opacity={0.62} /></mesh>
+  </group>;
+}
+
+function CityMarker() {
+  return <group position={[-2.5, -1.1, -22]}>
+    {Array.from({ length: 11 }, (_, i) => { const height = 1.5 + (i % 5) * 0.75; return <mesh key={i} position={[(i % 4 - 1.5) * 1.35, height / 2, (Math.floor(i / 4) - 1) * 1.4]}><boxGeometry args={[0.8, height, 0.8]} /><meshStandardMaterial color="#122f40" emissive={i % 3 ? "#09202c" : "#1e709a"} emissiveIntensity={1.2} metalness={0.55} /></mesh>; })}
+    <gridHelper args={[9, 12, "#61c5f3", "#173544"]} />
+  </group>;
+}
+
+function ForestMarker() {
+  return <group position={[2.2, -1.2, -36]}>
+    <mesh rotation={[-Math.PI / 2, 0, 0]}><planeGeometry args={[9, 10]} /><meshStandardMaterial color="#1d2b1d" /></mesh>
+    {Array.from({ length: 16 }, (_, i) => { const height = 4 + (i % 6) * 0.55; return <mesh key={i} position={[(i % 2 ? 1 : -1) * (1.7 + (i % 5) * 0.58), height / 2, ((i * 17) % 13 - 6) * 0.5]}><cylinderGeometry args={[0.08, 0.12, height, 7]} /><meshStandardMaterial color={i % 3 ? "#567943" : "#88a85a"} /></mesh>; })}
+    {[-1.2, 1.2].map((x) => <mesh key={x} position={[x, 1.4, 1]}><boxGeometry args={[0.38, 0.5, 0.38]} /><meshStandardMaterial color="#ffb461" emissive="#ff7d2f" emissiveIntensity={3} /></mesh>)}
+  </group>;
+}
+
+function SkyMarker() {
+  const nodes = useMemo(() => Array.from({ length: 18 }, (_, i) => new THREE.Vector3(((i * 37) % 15 - 7) * 0.52, ((i * 19) % 11 - 3) * 0.42, ((i * 23) % 9 - 4) * 0.38)), []);
+  const geometry = useMemo(() => { const pairs: THREE.Vector3[] = []; nodes.slice(0, 13).forEach((node, i) => pairs.push(node, nodes[(i * 5 + 4) % nodes.length])); return new THREE.BufferGeometry().setFromPoints(pairs); }, [nodes]);
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  return <group position={[-1.8, 2.5, -51]}>
+    {nodes.map((node, i) => <mesh key={i} position={node}><sphereGeometry args={[i % 5 ? 0.06 : 0.15, 9, 9]} /><meshBasicMaterial color={i % 5 ? "#b8b4ff" : "#ffffff"} /></mesh>)}
+    <lineSegments geometry={geometry}><lineBasicMaterial color="#aaa7ef" transparent opacity={0.32} /></lineSegments>
   </group>;
 }
 
 function SceneContents({ progress, onReady }: SceneProps) {
   useEffect(() => onReady(), [onReady]);
-  return <><color attach="background" args={["#07100d"]} /><fog attach="fog" args={["#07100d", 8, 27]} /><ambientLight intensity={0.62} color="#b8ddc7" /><directionalLight position={[7, 14, 8]} intensity={2.1} color="#e8fff0" /><CameraRig progress={progress} /><Laboratory /><SoftwareCity /><BambooForest /><AISky /></>;
+  return <>
+    <color attach="background" args={["#07100d"]} />
+    <fog attach="fog" args={["#07100d", 8, 25]} />
+    <ambientLight intensity={0.72} color="#c5dbe0" />
+    <directionalLight position={[-6, 12, 7]} intensity={2.4} color="#fff6df" />
+    <pointLight position={[-5, 7, -6]} color="#d9f1ff" intensity={24} distance={24} />
+    <mesh position={[-6, 9, -10]}><sphereGeometry args={[0.55, 18, 18]} /><meshBasicMaterial color="#fff8db" /></mesh>
+    <FlightRig progress={progress} />
+    <WindParticles />
+    <Cloud position={[-5, 4, 1]} scale={1.1} /><Cloud position={[5, 6, -8]} scale={1.4} /><Cloud position={[-5, 7, -18]} /><Cloud position={[5, 6, -30]} scale={1.2} /><Cloud position={[-4, 8, -44]} scale={1.35} />
+    <LaboratoryMarker /><CityMarker /><ForestMarker /><SkyMarker />
+  </>;
 }
 
 export function JourneyScene(props: SceneProps) {
-  return <div className="scene-canvas" aria-hidden="true"><Canvas camera={{ position: cameraPoints[0].toArray(), fov: 42, near: 0.1, far: 100 }} dpr={[1, 1.35]} gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}><SceneContents {...props} /></Canvas></div>;
+  return <div className="scene-canvas" aria-hidden="true"><Canvas camera={{ position: [0, 4, 13], fov: 43, near: 0.1, far: 100 }} dpr={[1, 1.3]} gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}><SceneContents {...props} /></Canvas></div>;
 }
