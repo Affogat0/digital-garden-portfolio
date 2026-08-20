@@ -40,8 +40,6 @@ h1 em { display: inline-block; margin-left: 14vw; color: transparent; -webkit-te
 .journey-index strong, .journey-index small { display: block; }
 .journey-index strong { font-size: 12px; font-weight: 540; }
 .journey-index small { margin-top: 5px; max-width: 130px; font-size: 9px; color: var(--mist); line-height: 1.3; }
-.scroll-cue { position: absolute; left: 50%; bottom: 3.7vh; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; font-size: 9px; text-transform: uppercase; letter-spacing: .14em; }
-.scroll-cue i { font-style: normal; display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 50%; animation: float 1.8s ease-in-out infinite; }
 .environment-panel { min-height: 100vh; display: flex; align-items: center; padding: 15vh 9vw; }
 .environment-panel::before { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgba(3,9,7,.92) 0%, rgba(3,9,7,.58) 38%, transparent 68%); }
 .environment-card { width: min(620px, 48vw); padding: clamp(24px, 3vw, 46px); border: 1px solid var(--line); background: rgba(5,14,11,.7); backdrop-filter: blur(8px); box-shadow: 0 35px 100px rgba(0,0,0,.2); }
@@ -58,7 +56,6 @@ h1 em { display: inline-block; margin-left: 14vw; color: transparent; -webkit-te
 .environment-city .environment-name, .environment-sky .environment-name { right: auto; left: 3vw; }
 footer { position: absolute; inset: auto 3.2vw 2.5vh; display: flex; justify-content: space-between; padding-top: 17px; border-top: 1px solid var(--line); color: var(--mist); font: 9px var(--font-geist-mono), monospace; letter-spacing: .12em; text-transform: uppercase; }
 footer a { color: var(--ivory); }
-@keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(4px); } }
 @media (max-width: 760px) {
   .site-nav { grid-template-columns: 1fr auto; padding: 15px 18px; }
   .nav-status, .wordmark-copy { display: none; }
@@ -70,7 +67,6 @@ footer a { color: var(--ivory); }
   .hero-copy { width: 88%; margin: 4vh 0 0 auto; }
   .journey-index { grid-template-columns: 1fr 1fr; margin: 7vh 25px 0 0; }
   .journey-index a:nth-child(2) { border-right: 0; }
-  .scroll-cue { display: none; }
   .environment-panel, .environment-city, .environment-sky { align-items: flex-end; justify-content: flex-start; padding: 18vh 35px 8vh 18px; }
   .environment-panel::before, .environment-city::before, .environment-sky::before { background: linear-gradient(0deg, rgba(3,9,7,.94) 0%, rgba(3,9,7,.2) 76%, transparent); }
   .environment-card { width: 100%; padding: 24px 20px; }

@@ -58,7 +58,6 @@ export function JourneyExperience() {
             <a href={`#${environment.slug}`} key={environment.slug}><span className="journey-number">{environment.id}</span><span><strong>{environment.name}</strong><small>{environment.discipline}</small></span></a>
           ))}
         </div>
-        <a className="scroll-cue" href="#laboratory"><span>Follow the white bird</span><i>↓</i></a>
       </section>
 
       {environments.map((environment, index) => (
